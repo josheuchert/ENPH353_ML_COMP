@@ -56,7 +56,7 @@ while not rospy.is_shutdown():
     pub_clue(id,password,0,"NA")
     controller()
     move_pub.publish(move)
-    rospy.sleep(2)
+    rospy.sleep(5)
     move.linear.x = 0
     move_pub.publish(move)
     pub_clue(id,password,-1,"NA")
