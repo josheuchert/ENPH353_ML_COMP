@@ -37,8 +37,7 @@ move = Twist()
 move.linear.z = 0
 move.linear.y = 0
 move.linear.x = .5
-move_pub.publish(move)
-move.linear.x = 0
+
 
 def camera_callback(data):
     try:
@@ -56,7 +55,9 @@ def controller():
 while not rospy.is_shutdown():
     pub_clue(id,password,0,"NA")
     controller()
-    rospy.sleep(1)
+    move_pub.publish(move)
+    rospy.sleep(2)
+    move.linear.x = 0
     move_pub.publish(move)
     pub_clue(id,password,-1,"NA")
     rospy.spin()    
