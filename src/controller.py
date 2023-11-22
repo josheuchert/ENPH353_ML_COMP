@@ -21,6 +21,8 @@ rospy.sleep(1)
 id = "winux"
 password = "password"
 
+
+
 # Clue message structure 
 # team ID: max 8 characters (no spaces)
 # team password: max 8 characters (no spaces)
@@ -45,7 +47,13 @@ def camera_callback(data):
         cv_image = br.imgmsg_to_cv2(data, "bgr8")
     except CvBridgeError as e:
         print(e)
-    im = cv_image
+    im_cut = cv_image[360:720,0:1280]
+    im_grey = img_gray = cv2.cvtColor(im_cut, cv2.COLOR_BGR2GRAY)
+    threshold = 180
+    _, binary = cv2.threshold(im_grey,threshold,255,cv2.THRESH_BINARY)
+    cv2.imshow("states", binary)
+    cv2.waitKey(1) 
+    
 
 
 def controller():
