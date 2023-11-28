@@ -52,10 +52,23 @@ class ROSHandler(QObject):
 
     def get_clue(self, cv_image):
         bi = cv2.bilateralFilter(cv_image, 5, 75, 75)
-        lower = np.array([90, 0, 0], dtype="uint8")
-        upper = np.array([120, 10, 10], dtype="uint8")
-        mask_blue = cv2.inRange(bi, lower, upper)
-        mask_white = cv2.bitwise_not(mask_blue)
+        # Convert BGR to HSV
+        hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
+
+        uh = 130
+        us = 255
+        uv = 255
+        lh = 110
+        ls = 50
+        lv = 50
+        lower_hsv = np.array([lh,ls,lv])
+        upper_hsv = np.array([uh,us,uv])
+        lower_white = np.array([0,0,250])
+        upper_white = np.array([255,255,255])
+
+        # Threshold the HSV image to get only blue colors
+        mask_blue = cv2.inRange(hsv, lower_hsv, upper_hsv)
+        mask_white = cv2.inRange(hsv, lower_white, upper_white)
         # threshold = 180
         # _, binary = cv2.threshold(img_gray,threshold,255,cv2.THRESH_BINARY)
         cnts, _ = cv2.findContours(mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -76,7 +89,7 @@ class ROSHandler(QObject):
             #Now draw them
             src =corners[1:]
             
-            if len(src) is 4:
+            if len(src) == 4:
                 # Rearrange the corners based on the assigned indicesght
                 centroid = corners[0]
                 def sort_key(point):
@@ -167,7 +180,7 @@ class ROSHandler(QObject):
                 print("stopped")
 
         if self.is_saving:
-            if self.cur_state is not None:
+            if self.cur_state != 0:
                 filename = f'#{self.counter}_'+self.cur_state+'.jpg'
                 # Write the image using the specified filename
                 cv2.imwrite(filename, binary)
