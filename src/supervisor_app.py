@@ -59,7 +59,7 @@ class ROSHandler(QObject):
         # threshold = 180
         # _, binary = cv2.threshold(img_gray,threshold,255,cv2.THRESH_BINARY)
         cnts, _ = cv2.findContours(mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        filtered_cnts = [contour for contour in cnts if cv2.contourArea(contour) > 5000]
+        filtered_cnts = [contour for contour in cnts if cv2.contourArea(contour) > 6000]
         if filtered_cnts:
             mask_blue[:] = 0
             cv2.fillPoly(mask_blue, filtered_cnts, (255,255,255))
@@ -72,56 +72,56 @@ class ROSHandler(QObject):
             ret, labels, stats, centroids = cv2.connectedComponentsWithStats(dst)
             criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
             corners = cv2.cornerSubPix(clue_mask,np.float32(centroids),(5,5),(-1,-1),criteria)
-            print(corners)
+            #print(corners)
             #Now draw them
             src =corners[1:]
             
+            if len(src) is 4:
+                # Rearrange the corners based on the assigned indicesght
+                centroid = corners[0]
+                def sort_key(point):
+                    angle = np.arctan2(point[1] - centroid[1], point[0] - centroid[0])
+                    return (angle + 2 * np.pi) % (2 * np.pi)
+                # Sort the source points based on their relative positions to match the destination points format
+                sorted_src = sorted(src, key=sort_key)
+                sorted_src = np.array(sorted_src)
 
-            # Rearrange the corners based on the assigned indicesght
-            centroid = corners[0]
-            def sort_key(point):
-                angle = np.arctan2(point[1] - centroid[1], point[0] - centroid[0])
-                return (angle + 2 * np.pi) % (2 * np.pi)
-            # Sort the source points based on their relative positions to match the destination points format
-            sorted_src = sorted(src, key=sort_key)
-            sorted_src = np.array(sorted_src)
+                # Reorder 'src' points to match the 'dest' format
+                src = np.array([sorted_src[2], sorted_src[3], sorted_src[1], sorted_src[0]], dtype=np.float32)
+                #print(src)
 
-            # Reorder 'src' points to match the 'dest' format
-            src = np.array([sorted_src[2], sorted_src[3], sorted_src[1], sorted_src[0]], dtype=np.float32)
-            print(src)
+                width = 600
+                height= 400
+                dest = np.float32([[0, 0],
+                            [width, 0],
+                            [0, height],
+                            [width , height]])
 
-            width = 600
-            height= 400
-            dest = np.float32([[0, 0],
-                        [width, 0],
-                        [0, height],
-                        [width , height]])
+                M = cv2.getPerspectiveTransform(src,dest)
+                clue = cv2.warpPerspective(cv_image,M,(width, height),flags=cv2.INTER_LINEAR)
 
-            M = cv2.getPerspectiveTransform(src,dest)
-            clue = cv2.warpPerspective(cv_image,M,(width, height),flags=cv2.INTER_LINEAR)
+                gray_clue = cv2.cvtColor(clue, cv2.COLOR_BGR2GRAY)
+                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(7,7))
+                gray_clue = clahe.apply(gray_clue)
+                #gray_clue = cv2.equalizeHist(gray_clue)
+                # perform threshold
+                sharpen_kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+                sharpen = cv2.filter2D(gray_clue, -1, sharpen_kernel)
 
-            gray_clue = cv2.cvtColor(clue, cv2.COLOR_BGR2GRAY)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-            gray_clue = clahe.apply(gray_clue)
-            #gray_clue = cv2.equalizeHist(gray_clue)
-            # perform threshold
-            sharpen_kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-            sharpen = cv2.filter2D(gray_clue, -1, sharpen_kernel)
+                # # remove noise / close gaps
+                # kernel =  np.ones((5,5),np.uint8)
+                # noise = cv2.morphologyEx(sharpen, cv2.MORPH_CLOSE, kernel)
 
-            # # remove noise / close gaps
-            # kernel =  np.ones((5,5),np.uint8)
-            # noise = cv2.morphologyEx(sharpen, cv2.MORPH_CLOSE, kernel)
+                # # dilate result to make characters more solid
+                # kernel2 =  np.ones((3,3),np.uint8)
+                # dilate = cv2.dilate(noise,kernel2,iterations = 1)
 
-            # # dilate result to make characters more solid
-            # kernel2 =  np.ones((3,3),np.uint8)
-            # dilate = cv2.dilate(noise,kernel2,iterations = 1)
+                retr, mask2 = cv2.threshold(gray_clue, 100, 255, cv2.THRESH_BINARY_INV)
+                #45 equihist
 
-            retr, mask2 = cv2.threshold(gray_clue, 100, 255, cv2.THRESH_BINARY_INV)
-            #45 equihist
-
-            #invert to get black text on white background
-            result = cv2.bitwise_not(mask2)
-            return result
+                #invert to get black text on white background
+                result = cv2.bitwise_not(mask2)
+                return result
         return cv_image
             
     
@@ -152,9 +152,9 @@ class ROSHandler(QObject):
             z_predict = drive_model.predict(img_aug)
             z_predict= denormalize_value(z_predict, -1 , 1)
             NN_move = Twist()
-            NN_move.angular.z = z_predict
+            NN_move.angular.z = z_predict*1.4
             NN_move.linear.y = 0
-            NN_move.linear.x = .2
+            NN_move.linear.x = .25
             self.move_pub.publish(NN_move)
         else: 
             if not self.executed_once:

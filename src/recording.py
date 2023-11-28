@@ -44,7 +44,7 @@ class Imitate:
         
         out = cv2.putText(binary,self.cur_state, (20,20), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255),2)
             
-        cv2.imshow("states", out)
+        cv2.imshow("states", im_cut)
         cv2.waitKey(1) 
         # save sate and image
 
