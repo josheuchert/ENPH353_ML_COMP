@@ -41,14 +41,14 @@ class ROSHandler(QObject):
         threshold = 180
         _, binary = cv2.threshold(im_grey,threshold,255,cv2.THRESH_BINARY)
 
-        out = cv2.putText(binary,self.cur_state, (20,20), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255),2)
-        self.image_signal.emit(out)
+        #out = cv2.putText(binary,self.cur_state, (20,20), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255),2)
+        self.image_signal.emit(binary)
 
         if self.is_saving:
             if self.cur_state is not None:
                 filename = f'#{self.counter}_'+self.cur_state+'.jpg'
                 # Write the image using the specified filename
-                cv2.imwrite(filename, out)
+                cv2.imwrite(filename, binary)
                 self.counter += 1
     
     def move_callback(self, data):

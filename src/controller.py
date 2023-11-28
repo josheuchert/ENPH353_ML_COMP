@@ -10,13 +10,16 @@ import cv2
 import numpy as np
 import keras
 from keras.models import load_model
-drive_model = load_model('test1.h5',compile=False)
+drive_model = load_model('test6.h5',compile=False)
 drive_model.compile(
                    optimizer='adam',
                    loss=keras.losses.MeanSquaredError()
                   )
 drive_model.summary()
 
+
+def denormalize_value(normalized_value, min_val, max_val):
+    return (normalized_value * (max_val - min_val)) + min_val
 
 #initialize publishers
 rospy.init_node('controller_node')
@@ -62,12 +65,13 @@ def camera_callback(data):
     cv2.waitKey(1) 
     img_aug = np.expand_dims(img, axis=0)
     z_predict = drive_model.predict(img_aug)
-    z_predict=z_predict*2-1
+    print(z_predict)
+    z_predict= denormalize_value(z_predict, -1 , 1)
     print(z_predict)
     NN_move = Twist()
-    NN_move.angular.z = z_predict
+    NN_move.angular.z = z_predict*1.4
     NN_move.linear.y = 0
-    NN_move.linear.x = .3
+    NN_move.linear.x = .2
     move_pub.publish(NN_move)
 
 
