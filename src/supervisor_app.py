@@ -52,7 +52,6 @@ class ROSHandler(QObject):
 
     def get_clue(self, cv_image):
         bi = cv2.bilateralFilter(cv_image, 5, 75, 75)
-        # Convert BGR to HSV
         hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
         uh = 130
@@ -63,28 +62,26 @@ class ROSHandler(QObject):
         lv = 50
         lower_hsv = np.array([lh,ls,lv])
         upper_hsv = np.array([uh,us,uv])
-        lower_white = np.array([0,0,250])
-        upper_white = np.array([255,255,255])
+        lower_white = np.array([0,0,90])
+        upper_white = np.array([10,10,110])
 
         # Threshold the HSV image to get only blue colors
         mask_blue = cv2.inRange(hsv, lower_hsv, upper_hsv)
-        mask_white = cv2.inRange(hsv, lower_white, upper_white)
+        mask_white = cv2.bitwise_not(mask_blue)
         # threshold = 180
         # _, binary = cv2.threshold(img_gray,threshold,255,cv2.THRESH_BINARY)
         cnts, _ = cv2.findContours(mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        filtered_cnts = [contour for contour in cnts if cv2.contourArea(contour) > 6000]
+        cv2.fillPoly(mask_blue, cnts, (255,255,255))
+        # filtered_cnts = [contour for contour in cnts if cv2.contourArea(contour) > 1000]
+        mask_clue = cv2.bitwise_and(mask_blue,mask_white)
+        filtered_cnts = [contour for contour in cnts if cv2.contourArea(contour) > 1000]
         if filtered_cnts:
-            mask_blue[:] = 0
-            cv2.fillPoly(mask_blue, filtered_cnts, (255,255,255))
-            clue_mask = cv2.bitwise_and(mask_blue,mask_blue,mask=mask_white)
-            cnts, _ = cv2.findContours(clue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            cv2.fillPoly(clue_mask, cnts, (255,255,255))
-            dst = cv2.cornerHarris(clue_mask,2,3,0.04)
+            dst = cv2.cornerHarris(mask_clue,2,3,0.04)
             ret, dst = cv2.threshold(dst,0.1*dst.max(),255,0)
             dst = np.uint8(dst)
             ret, labels, stats, centroids = cv2.connectedComponentsWithStats(dst)
             criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
-            corners = cv2.cornerSubPix(clue_mask,np.float32(centroids),(5,5),(-1,-1),criteria)
+            corners = cv2.cornerSubPix(mask_clue,np.float32(centroids),(5,5),(-1,-1),criteria)
             #print(corners)
             #Now draw them
             src =corners[1:]
@@ -114,7 +111,7 @@ class ROSHandler(QObject):
                 clue = cv2.warpPerspective(cv_image,M,(width, height),flags=cv2.INTER_LINEAR)
 
                 gray_clue = cv2.cvtColor(clue, cv2.COLOR_BGR2GRAY)
-                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(7,7))
+                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
                 gray_clue = clahe.apply(gray_clue)
                 #gray_clue = cv2.equalizeHist(gray_clue)
                 # perform threshold
