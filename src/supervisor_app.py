@@ -25,7 +25,7 @@ import tensorflow as tf
 # drive_model.summary()
 
 
-interpreter = tf.lite.Interpreter(model_path='quantized_model_road.tflite')
+interpreter = tf.lite.Interpreter(model_path='quantized_model_mountain.tflite')
 interpreter.allocate_tensors()
 input_details = interpreter.get_input_details()[0]
 output_details = interpreter.get_output_details()[0]
