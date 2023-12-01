@@ -13,18 +13,38 @@ from cv_bridge import CvBridge
 from cv_bridge import CvBridgeError
 from PyQt5.QtCore import QObject, pyqtSignal
 import numpy as np
-import keras
-from keras.models import load_model
+import tensorflow as tf
+# import keras
+# from keras.models import load_model
 
-drive_model = load_model('test5.h5',compile=False)
-drive_model.compile(
-                   optimizer='adam',
-                   loss=keras.losses.MeanSquaredError()
-                  )
-drive_model.summary()
+# drive_model = load_model('full.h5',compile=False)
+# drive_model.compile(
+#                    optimizer='adam',
+#                    loss=keras.losses.MeanSquaredError()
+#                   )
+# drive_model.summary()
+
+
+interpreter = tf.lite.Interpreter(model_path='quantized_model_road.tflite')
+interpreter.allocate_tensors()
+input_details = interpreter.get_input_details()[0]
+output_details = interpreter.get_output_details()[0]
 
 def denormalize_value(normalized_value, min_val, max_val):
     return (normalized_value * (max_val - min_val)) + min_val
+
+def run_model(img):
+    dim = (160, 90)
+    img = np.array(img)  # Convert to NumPy array
+    resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+    img = resized / 255.0 
+    img_aug = img.reshape((1, 90, 160, 1)).astype(input_details["dtype"])
+    interpreter.set_tensor(input_details["index"], img_aug)
+    interpreter.invoke()
+    output = interpreter.get_tensor(output_details["index"])[0]
+    output = denormalize_value(output, -2, 2)
+    print(output)
+    return output
 
 
 parent_dir = '/home/fizzer/training'
@@ -53,7 +73,7 @@ class ROSHandler(QObject):
     def get_clue(self, cv_image):
         bi = cv2.bilateralFilter(cv_image, 5, 75, 75)
         hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
-
+        lv = 50
         uh = 130
         us = 255
         uv = 255
@@ -72,66 +92,53 @@ class ROSHandler(QObject):
         # _, binary = cv2.threshold(img_gray,threshold,255,cv2.THRESH_BINARY)
         cnts, _ = cv2.findContours(mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         cv2.fillPoly(mask_blue, cnts, (255,255,255))
-        # filtered_cnts = [contour for contour in cnts if cv2.contourArea(contour) > 1000]
-        mask_clue = cv2.bitwise_and(mask_blue,mask_white)
         filtered_cnts = [contour for contour in cnts if cv2.contourArea(contour) > 1000]
-        if filtered_cnts:
-            dst = cv2.cornerHarris(mask_clue,2,3,0.04)
-            ret, dst = cv2.threshold(dst,0.1*dst.max(),255,0)
-            dst = np.uint8(dst)
-            ret, labels, stats, centroids = cv2.connectedComponentsWithStats(dst)
-            criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
-            corners = cv2.cornerSubPix(mask_clue,np.float32(centroids),(5,5),(-1,-1),criteria)
-            #print(corners)
-            #Now draw them
-            src =corners[1:]
+        mask_clue = cv2.bitwise_and(mask_blue,mask_white)
+        num_white_pixels = cv2.countNonZero(mask_blue)
+        cnts, _ = cv2.findContours(mask_clue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        filtered_cnts = [contour for contour in cnts if cv2.contourArea(contour) > 1000]
+        print(num_white_pixels)
+        if num_white_pixels > 3000:
+            for c in filtered_cnts:
+                epsilon = 0.08 * cv2.arcLength(c, True)
+                approx = cv2.approxPolyDP(c, epsilon, True)
+                #cv2.drawContours(cv_image, [approx], -1, (0, 255, 0), 2)
+            print(approx)
+            src = np.array([approx[0], approx[3], approx[1], approx[2]], dtype=np.float32)
+            width = 600
+            height= 400
+            dest = np.float32([[0, 0],
+                        [width, 0],
+                        [0, height],
+                        [width , height]])
+
+            M = cv2.getPerspectiveTransform(src,dest)
+            clue = cv2.warpPerspective(cv_image,M,(width, height),flags=cv2.INTER_LINEAR)
+
+            gray_clue = cv2.cvtColor(clue, cv2.COLOR_BGR2GRAY)
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            gray_clue = clahe.apply(gray_clue)
+            #gray_clue = cv2.equalizeHist(gray_clue)
+            # perform threshold
+            sharpen_kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+            sharpen = cv2.filter2D(gray_clue, -1, sharpen_kernel)
+
+            # # remove noise / close gaps
+            # kernel =  np.ones((5,5),np.uint8)
+            # noise = cv2.morphologyEx(sharpen, cv2.MORPH_CLOSE, kernel)
+
+            # # dilate result to make characters more solid
+            # kernel2 =  np.ones((3,3),np.uint8)
+            # dilate = cv2.dilate(noise,kernel2,iterations = 1)
+
+            retr, mask2 = cv2.threshold(gray_clue, 100, 255, cv2.THRESH_BINARY_INV)
+            # #45 equihist
+
             
-            if len(src) == 4:
-                # Rearrange the corners based on the assigned indicesght
-                centroid = corners[0]
-                def sort_key(point):
-                    angle = np.arctan2(point[1] - centroid[1], point[0] - centroid[0])
-                    return (angle + 2 * np.pi) % (2 * np.pi)
-                # Sort the source points based on their relative positions to match the destination points format
-                sorted_src = sorted(src, key=sort_key)
-                sorted_src = np.array(sorted_src)
 
-                # Reorder 'src' points to match the 'dest' format
-                src = np.array([sorted_src[2], sorted_src[3], sorted_src[1], sorted_src[0]], dtype=np.float32)
-                #print(src)
-
-                width = 600
-                height= 400
-                dest = np.float32([[0, 0],
-                            [width, 0],
-                            [0, height],
-                            [width , height]])
-
-                M = cv2.getPerspectiveTransform(src,dest)
-                clue = cv2.warpPerspective(cv_image,M,(width, height),flags=cv2.INTER_LINEAR)
-
-                gray_clue = cv2.cvtColor(clue, cv2.COLOR_BGR2GRAY)
-                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-                gray_clue = clahe.apply(gray_clue)
-                #gray_clue = cv2.equalizeHist(gray_clue)
-                # perform threshold
-                sharpen_kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-                sharpen = cv2.filter2D(gray_clue, -1, sharpen_kernel)
-
-                # # remove noise / close gaps
-                # kernel =  np.ones((5,5),np.uint8)
-                # noise = cv2.morphologyEx(sharpen, cv2.MORPH_CLOSE, kernel)
-
-                # # dilate result to make characters more solid
-                # kernel2 =  np.ones((3,3),np.uint8)
-                # dilate = cv2.dilate(noise,kernel2,iterations = 1)
-
-                retr, mask2 = cv2.threshold(gray_clue, 100, 255, cv2.THRESH_BINARY_INV)
-                #45 equihist
-
-                #invert to get black text on white background
-                result = cv2.bitwise_not(mask2)
-                return result
+            # #invert to get black text on white background
+            result = cv2.bitwise_not(mask2)
+            return result
         return cv_image
             
     
@@ -143,28 +150,23 @@ class ROSHandler(QObject):
         except CvBridgeError as e:
             print(e)
         im_cut = cv_image[360:720,0:1280]
-        im_grey = img_gray = cv2.cvtColor(im_cut, cv2.COLOR_BGR2GRAY)
+        im_grey = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
         threshold = 180
         _, binary = cv2.threshold(im_grey,threshold,255,cv2.THRESH_BINARY)
 
-        img = np.array(binary)  # Convert to NumPy array
-      # resize image
-        dim = (200, 66)
-        resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
-        img = resized / 255.0  # Normalize to range [0, 1] (assuming RGB images
+        img = np.array(im_grey)
 
-        clue = self.get_clue(cv_image)
-        self.image_signal1.emit(binary)
-        self.image_signal2.emit(clue)
+        #clue = self.get_clue(cv_image)
+        self.image_signal1.emit(cv_image)
+        #self.image_signal2.emit(clue)
         
         if self.controlled is False:
-            img_aug = np.expand_dims(img, axis=0)
-            z_predict = drive_model.predict(img_aug)
-            z_predict= denormalize_value(z_predict, -1 , 1)
+            # img_aug = np.expand_dims(img, axis=0)
+            z_predict = run_model(im_grey)
             NN_move = Twist()
-            NN_move.angular.z = z_predict*1.4
+            NN_move.angular.z = z_predict
             NN_move.linear.y = 0
-            NN_move.linear.x = .25
+            NN_move.linear.x = .5
             self.move_pub.publish(NN_move)
         else: 
             if not self.executed_once:

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1146</width>
-    <height>617</height>
+    <width>437</width>
+    <height>451</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,8 +17,8 @@
    <widget class="QPushButton" name="toggle_saving">
     <property name="geometry">
      <rect>
-      <x>510</x>
-      <y>440</y>
+      <x>200</x>
+      <y>290</y>
       <width>211</width>
       <height>91</height>
      </rect>
@@ -35,10 +35,10 @@
    <widget class="QLabel" name="live_image_label">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>90</y>
-      <width>1091</width>
-      <height>311</height>
+      <x>20</x>
+      <y>50</y>
+      <width>360</width>
+      <height>180</height>
      </rect>
     </property>
     <property name="text">
@@ -48,8 +48,8 @@
    <widget class="QLabel" name="label">
     <property name="geometry">
      <rect>
-      <x>150</x>
-      <y>470</y>
+      <x>20</x>
+      <y>300</y>
       <width>161</width>
       <height>21</height>
      </rect>
@@ -69,8 +69,8 @@
    <widget class="QLineEdit" name="folder_name">
     <property name="geometry">
      <rect>
-      <x>150</x>
-      <y>500</y>
+      <x>20</x>
+      <y>330</y>
       <width>171</width>
       <height>29</height>
      </rect>
@@ -90,7 +90,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1146</width>
+     <width>437</width>
      <height>22</height>
     </rect>
    </property>

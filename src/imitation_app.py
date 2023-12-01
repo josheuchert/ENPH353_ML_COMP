@@ -39,16 +39,18 @@ class ROSHandler(QObject):
         im_cut = cv_image[360:720,0:1280]
         im_grey = img_gray = cv2.cvtColor(im_cut, cv2.COLOR_BGR2GRAY)
         threshold = 180
+        dim = [320,180]
         _, binary = cv2.threshold(im_grey,threshold,255,cv2.THRESH_BINARY)
+        resized = cv2.resize(cv_image, dim, interpolation = cv2.INTER_AREA)
 
         #out = cv2.putText(binary,self.cur_state, (20,20), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255),2)
-        self.image_signal.emit(binary)
+        self.image_signal.emit(resized)
 
         if self.is_saving:
             if self.cur_state is not None:
                 filename = f'#{self.counter}_'+self.cur_state+'.jpg'
                 # Write the image using the specified filename
-                cv2.imwrite(filename, binary)
+                cv2.imwrite(filename, resized)
                 self.counter += 1
     
     def move_callback(self, data):
