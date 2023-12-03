@@ -25,10 +25,15 @@ import tensorflow as tf
 # drive_model.summary()
 
 
-interpreter = tf.lite.Interpreter(model_path='quantized_model_mountain.tflite')
-interpreter.allocate_tensors()
-input_details = interpreter.get_input_details()[0]
-output_details = interpreter.get_output_details()[0]
+interpreter1 = tf.lite.Interpreter(model_path='quantized_model_yoda2.tflite')
+interpreter1.allocate_tensors()
+input_details1 = interpreter1.get_input_details()[0]
+output_details1 = interpreter1.get_output_details()[0]
+
+interpreter2 = tf.lite.Interpreter(model_path='quantized_model_yoda_drive3.tflite')
+interpreter2.allocate_tensors()
+input_details2 = interpreter2.get_input_details()[0]
+output_details2 = interpreter2.get_output_details()[0]
 
 def denormalize_value(normalized_value, min_val, max_val):
     return (normalized_value * (max_val - min_val)) + min_val
@@ -38,13 +43,16 @@ def run_model(img):
     img = np.array(img)  # Convert to NumPy array
     resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
     img = resized / 255.0 
-    img_aug = img.reshape((1, 90, 160, 1)).astype(input_details["dtype"])
-    interpreter.set_tensor(input_details["index"], img_aug)
-    interpreter.invoke()
-    output = interpreter.get_tensor(output_details["index"])[0]
-    output = denormalize_value(output, -2, 2)
-    print(output)
-    return output
+    img_aug = img.reshape((1, 90, 160, 1)).astype(input_details1["dtype"])
+    interpreter1.set_tensor(input_details1["index"], img_aug)
+    interpreter1.invoke()
+    z = interpreter1.get_tensor(output_details1["index"])[0]
+    z = denormalize_value(z, -2, 2) -.04262948
+    interpreter2.set_tensor(input_details2["index"], img_aug)
+    interpreter2.invoke()
+    x = interpreter2.get_tensor(output_details2["index"])[0] -.04262948
+    print(f'x:{x},z:{z}')
+    return z
 
 
 parent_dir = '/home/fizzer/training'
@@ -166,7 +174,7 @@ class ROSHandler(QObject):
             NN_move = Twist()
             NN_move.angular.z = z_predict
             NN_move.linear.y = 0
-            NN_move.linear.x = .5
+            NN_move.linear.x = 1
             self.move_pub.publish(NN_move)
         else: 
             if not self.executed_once:

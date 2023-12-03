@@ -45,6 +45,14 @@ class Imitate:
         upper_blue= np.array([130,255,255])
         lower_vehicle = np.array([0,0,93])
         upper_vehicle = np.array([10,10,249])
+        lower_yoda1 = np.array([165,10,14])
+        upper_yoda1 = np.array([186,170,170])
+
+        lower_yoda2 = np.array([0,0,0])
+        upper_yoda2 = np.array([9,90,80])
+
+        lower_car = np.array([0,0,93])
+        upper_car = np.array([10,10,249])
         img_gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
         bi = cv2.bilateralFilter(cv_image, 5, 75, 75)
         hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
@@ -55,9 +63,13 @@ class Imitate:
         upper_road_hsv= np.array([6,6,90])
         mask_road = cv2.inRange(hsv_cut, lower_road_hsv, upper_road_hsv)
         mask_ped = cv2.inRange(hsv, lower_ped, upper_ped)
+        mask_vehicle = cv2.inRange(hsv, lower_vehicle, upper_vehicle)
+        mask_yoda1 = cv2.inRange(hsv, lower_yoda1, upper_yoda1)
+        mask_yoda2 = cv2.inRange(hsv, lower_yoda2, upper_yoda2)
 
         # Apply background subtraction to get the foreground mask
-        fg_mask = bg_subtractor.apply(mask_ped)
+        fg_mask = bg_subtractor.apply(mask_yoda2)
+        print(f'yoda2 cout; {cv2.countNonZero(mask_yoda2)}')
 
         # Apply additional morphological operations to clean the mask (optional)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
@@ -65,7 +77,7 @@ class Imitate:
 
         contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # Iterate through contours and filter based on size (area)
-        filtered_cnts = [contour for contour in contours if cv2.contourArea(contour) > 50]
+        filtered_cnts = [contour for contour in contours if cv2.contourArea(contour) > 500]
         for cnts in filtered_cnts:
             print(cv2.contourArea(cnts))
             # Draw bounding rectangle or perform further processing on the detected object
@@ -177,8 +189,8 @@ class Imitate:
             #     x, y = int(corner[0]), int(corner[1])
             #     cv2.circle(cv_image,(x,y), 2, (0,255,0), -1)  # -1 signifies filled circle
         
-        cv2.imshow("gray", fg_mask)
-        cv2.imshow("cut", mask_ped)
+        cv2.imshow("gray", mask_yoda2)
+        cv2.imshow("cut", mask_yoda1)
         cv2.imshow("hsv", cv_image)
         # cv2.imshow("blue", mask_blue)
         # cv2.imshow("out", result)
