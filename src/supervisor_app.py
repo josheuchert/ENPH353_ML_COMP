@@ -25,7 +25,7 @@ import tensorflow as tf
 # drive_model.summary()
 
 
-interpreter1 = tf.lite.Interpreter(model_path='quantized_model_yoda2.tflite')
+interpreter1 = tf.lite.Interpreter(model_path='quantized_model_yoda3.tflite')
 interpreter1.allocate_tensors()
 input_details1 = interpreter1.get_input_details()[0]
 output_details1 = interpreter1.get_output_details()[0]
@@ -47,7 +47,7 @@ def run_model(img):
     interpreter1.set_tensor(input_details1["index"], img_aug)
     interpreter1.invoke()
     z = interpreter1.get_tensor(output_details1["index"])[0]
-    z = denormalize_value(z, -2, 2) -.04262948
+    z = denormalize_value(z, -3, 3) 
     interpreter2.set_tensor(input_details2["index"], img_aug)
     interpreter2.invoke()
     x = interpreter2.get_tensor(output_details2["index"])[0] -.04262948

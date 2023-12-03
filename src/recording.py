@@ -116,8 +116,9 @@ class Imitate:
         num_white_pixels = cv2.countNonZero(mask_clue)
         cnts, _ = cv2.findContours(mask_clue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         filtered_cnts = [contour for contour in cnts if cv2.contourArea(contour) > 1000]
-        print(cv2.countNonZero(mask_pink))
-        if num_white_pixels > 3000 and filtered_cnts:
+        #print(cv2.countNonZero(num_white_pixels))
+        print(f'clue cout; {cv2.countNonZero(mask_clue)}')
+        if num_white_pixels > 15000 and filtered_cnts:
             for c in filtered_cnts:
                 epsilon = 0.08 * cv2.arcLength(c, True)
                 approx = cv2.approxPolyDP(c, epsilon, True)
@@ -189,8 +190,30 @@ class Imitate:
             #     x, y = int(corner[0]), int(corner[1])
             #     cv2.circle(cv_image,(x,y), 2, (0,255,0), -1)  # -1 signifies filled circle
         
+        # Get the largest contour (assumed to be the white line)
+        contours, _ = cv2.findContours(mask_pink, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        largest_contour = max(contours, key=cv2.contourArea)
+        
+        # Get orientation of the line using its bounding rectangle
+        rect = cv2.minAreaRect(largest_contour)
+        angle = rect[2]
+        if angle>45:
+            angle = angle-90
+        # Rotate the robot to align with the line (example, adjust as needed)
+        # Your robot control logic here to adjust orientation based on 'angle'
+        # For simulation purposes, let's print the angle
+        print("Angle to straighten:", angle)
+        if 20>angle>1:
+            print("RIGHT")
+
+        elif -20<angle <-1:
+            print("LEFT")
+        elif -1<angle<1:
+            print ("STRAIGHT")
+        
         cv2.imshow("gray", mask_yoda2)
-        cv2.imshow("cut", mask_yoda1)
+        cv2.imshow("cut", mask_clue)
         cv2.imshow("hsv", cv_image)
         # cv2.imshow("blue", mask_blue)
         # cv2.imshow("out", result)
