@@ -28,7 +28,7 @@ input_details_road = interpreter_road.get_input_details()[0]
 output_details_road = interpreter_road.get_output_details()[0]
 print("Loaded Road")
 
-interpreter_grass = tf.lite.Interpreter(model_path='quantized_model_grass4.tflite')
+interpreter_grass = tf.lite.Interpreter(model_path='quantized_model_grass2.tflite')
 interpreter_grass.allocate_tensors()
 input_details_grass = interpreter_grass.get_input_details()[0]
 output_details_grass = interpreter_grass.get_output_details()[0]
@@ -239,12 +239,12 @@ class StateMachine:
         self.good_values = []
 
     def road_state(self):
-        z = run_model(self.drive_input,interpreter_road,input_details_road,output_details_road,2.3)
+        z = run_model(self.drive_input,interpreter_road,input_details_road,output_details_road,2.2)
         pub_cmd_vel(.5,z)
 
     def grass_state(self):
         z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,2.5)
-        pub_cmd_vel(.6,z)
+        pub_cmd_vel(.55,z)
 
     def yoda_drive_state(self):
         z = run_model(self.drive_input,interpreter_yoda,input_details_yoda,output_details_yoda,3)
@@ -294,7 +294,7 @@ class StateMachine:
     
     def mountain_state(self):
         z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain,2.5)
-        pub_cmd_vel(.6,z)
+        pub_cmd_vel(.5,z)
 
     def pedestrian_state(self):
         fg_mask = self.bg_subtractor.apply(self.state_data1)
@@ -321,8 +321,11 @@ class StateMachine:
              
 
     def vehicle_state(self):
+        
+
         z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain)
         pub_cmd_vel(.4,z)
+
 
     def publish_clues(self):
         print("Publishing Clues")
@@ -395,6 +398,8 @@ class StateMachine:
             if self.clue_count == 7:
                 self.publish_clues()
                 print("GAME OVER")
+            if self.clue_count == 2:
+                self.current_state = "VEHICLE"
             
             
     
@@ -577,6 +582,10 @@ def camera_callback(data):
                 state_machine.event_occurred("CLUE",result)
                 print("Update result")
                 
+
+               
+
+                
                 
     
     if cv2.countNonZero(mask_pink) > 25000:
@@ -600,6 +609,9 @@ def camera_callback(data):
     elif state_machine.current_state == "PEDESTRIAN":
         state_machine.state_data1 = mask_ped
         state_machine.pedestrian_state()
+    elif state_machine.current_state == "VEHICLE":
+        state_machine.state_data1 = mask_vehicle
+        state_machine.vehicle_state()
     elif state_machine.current_state == "YODA_WAIT":
         if state_machine.yoda_wait == False:
             state_machine.state_data1 = mask_yoda1
