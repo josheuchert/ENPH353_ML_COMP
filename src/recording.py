@@ -68,8 +68,8 @@ class Imitate:
         mask_yoda2 = cv2.inRange(hsv, lower_yoda2, upper_yoda2)
 
         # Apply background subtraction to get the foreground mask
-        fg_mask = bg_subtractor.apply(mask_yoda2)
-        print(f'yoda2 cout; {cv2.countNonZero(mask_yoda2)}')
+        fg_mask = bg_subtractor.apply(mask_vehicle)
+        print(f'mask_veh cout; {cv2.countNonZero(mask_vehicle)}')
 
         # Apply additional morphological operations to clean the mask (optional)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
@@ -204,29 +204,29 @@ class Imitate:
             #     cv2.circle(cv_image,(x,y), 2, (0,255,0), -1)  # -1 signifies filled circle
         
         # # Get the largest contour (assumed to be the white line)
-        # contours, _ = cv2.findContours(mask_pink, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(mask_pink, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        # largest_contour = max(contours, key=cv2.contourArea)
+        largest_contour = max(contours, key=cv2.contourArea)
         
-        # # Get orientation of the line using its bounding rectangle
-        # rect = cv2.minAreaRect(largest_contour)
-        # angle = rect[2]
-        # if angle>45:
-        #     angle = angle-90
-        # # Rotate the robot to align with the line (example, adjust as needed)
-        # # Your robot control logic here to adjust orientation based on 'angle'
-        # # For simulation purposes, let's print the angle
-        # print("Angle to straighten:", angle)
-        # if 20>angle>1:
-        #     print("RIGHT")
+        # Get orientation of the line using its bounding rectangle
+        rect = cv2.minAreaRect(largest_contour)
+        angle = rect[2]
+        if angle>45:
+            angle = angle-90
+        # Rotate the robot to align with the line (example, adjust as needed)
+        # Your robot control logic here to adjust orientation based on 'angle'
+        # For simulation purposes, let's print the angle
+        print("Angle to straighten:", angle)
+        if 20>angle>1:
+            print("RIGHT")
 
-        # elif -20<angle <-1:
-        #     print("LEFT")
-        # elif -1<angle<1:
-        #     print ("STRAIGHT")
+        elif -20<angle <-1:
+            print("LEFT")
+        elif -1<angle<1:
+            print ("STRAIGHT")
         
         #cv2.imshow("gray", mask_yoda2)
-        cv2.imshow("cut", mask_clue)
+        cv2.imshow("cut", mask_pink)
         #cv2.imshow("hsv", cv_image)
         # cv2.imshow("blue", mask_blue)
         # cv2.imshow("out", result)

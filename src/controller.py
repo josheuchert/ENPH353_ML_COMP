@@ -293,8 +293,11 @@ class StateMachine:
         
     
     def mountain_state(self):
-        z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain,2.5)
-        pub_cmd_vel(.5,z)
+        if not self.aligned:
+            self.align()
+        else:
+            z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain,2.5)
+            pub_cmd_vel(.5,z)
 
     def pedestrian_state(self):
         fg_mask = self.bg_subtractor.apply(self.state_data1)
@@ -321,11 +324,28 @@ class StateMachine:
              
 
     def vehicle_state(self):
-        
-
-        z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain)
-        pub_cmd_vel(.4,z)
-
+        fg_mask = self.bg_subtractor.apply(self.state_data1)
+        # Apply additional morphological operations to clean the mask (optional)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
+        contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # Iterate through contours and filter based on size (area)
+        print(cv2.contourArea(contours))
+        filtered_cnts = [contour for contour in contours if cv2.contourArea(contour) > 1000]
+        for cnts in filtered_cnts:
+            # Draw bounding rectangle or perform further processing on the detected object
+            x, y, w, h = cv2.boundingRect(cnts)
+            cv2.rectangle(self.cv_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        if filtered_cnts:
+            self.frame_counter = 0
+        else:
+            self.frame_counter +=1 
+            print(self.frame_counter)
+        if self.frame_counter > 10:
+            self.frame_counter = 0
+            holder = self.current_state
+            self.current_state = "ROAD"
+            print(f'{holder} -------> {self.current_state}')
 
     def publish_clues(self):
         print("Publishing Clues")
@@ -351,8 +371,6 @@ class StateMachine:
                 print("No good values found")
 
 
-
-
     def event_occurred(self, event, data):
         # Callback function to handle the event
         if event == "PINK" and not self.pink_cooldown:
@@ -370,6 +388,7 @@ class StateMachine:
             elif holder == "YODA_DRIVE":
                 #self.align() 
                 self.current_state = "MOUNTAIN"
+                self.aligned = False
                 self.mountain_state()
             print(f'{holder} -------> {self.current_state}')
         
@@ -393,7 +412,7 @@ class StateMachine:
         if event == "CLUE":
             if not self.clue_cooldown:
                 self.clue_cooldown = True
-                rospy.Timer(rospy.Duration(2.5), self.update_clue_count, oneshot=True)
+                rospy.Timer(rospy.Duration(2), self.update_clue_count, oneshot=True)
             self.cur_clue.append(data)
             print("CLUE ADDED")
             if self.clue_count == 7:
@@ -410,6 +429,12 @@ class StateMachine:
         self.clues.append(self.cur_clue)
         print(len(self.cur_clue))
         self.cur_clue = []
+        # if self.clue_count == 2:
+        #     pub_cmd_vel(0,0)
+        #     holder = self.current_state
+        #     if holder == "ROAD": 
+        #         self.current_state = "VEHICLE"
+        #     print(f'{holder} -------> {self.current_state}')
         self.clue_count +=1
         print(f'Moving to CLUE #{self.clue_count+1}')
         
@@ -505,7 +530,7 @@ def camera_callback(data):
     cnts, _ = cv2.findContours(mask_clue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     filtered_cnts = [contour for contour in cnts if cv2.contourArea(contour) > 1000]
     
-    if cv2.countNonZero(mask_clue) > 15000 and filtered_cnts:
+    if cv2.countNonZero(mask_clue) > 14000 and filtered_cnts:
             print(cv2.countNonZero(mask_clue))
             approx = []
             for c in filtered_cnts:
@@ -581,12 +606,6 @@ def camera_callback(data):
                 state_machine.event_occurred("CLUE",result)
                 print("Update result")
 
-
-               
-
-                
-                
-    
     if cv2.countNonZero(mask_pink) > 25000:
             state_machine.event_occurred("PINK",None)
 
@@ -601,6 +620,7 @@ def camera_callback(data):
     
 
     if state_machine.current_state == "ROAD":
+        state_machine.state_data1 = mask_clue
         state_machine.road_state()
     elif state_machine.current_state == "GRASS":
         state_machine.grass_state()
@@ -621,6 +641,7 @@ def camera_callback(data):
     elif state_machine.current_state == "YODA_DRIVE":
         state_machine.yoda_drive_state()
     elif state_machine.current_state == "MOUNTAIN":
+        state_machine.state_data2 = mask_pink
         state_machine.mountain_state()
             
     #pub_clue(id,password,-1,"NA")
