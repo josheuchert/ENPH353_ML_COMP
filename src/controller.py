@@ -9,6 +9,7 @@ from cv_bridge import CvBridgeError
 import cv2
 import numpy as np
 import tensorflow as tf
+
 # import keras
 # from keras.models import load_model
 # drive_model = load_model('test6.h5',compile=False)
@@ -17,6 +18,8 @@ import tensorflow as tf
 #                    loss=keras.losses.MeanSquaredError()
 #                   )
 # drive_model.summary()
+
+
 interpreter_road = tf.lite.Interpreter(model_path='quantized_model_road2.tflite')
 interpreter_road.allocate_tensors()
 input_details_road = interpreter_road.get_input_details()[0]
@@ -46,7 +49,7 @@ def run_model(img, interpreter, input_details, output_details, steer):
     interpreter.set_tensor(input_details_road["index"], img_aug)
     interpreter.invoke()
     output = interpreter.get_tensor(output_details["index"])[0]
-    print(output)
+    # print(output)
     output = denormalize_value(output, -steer, steer)
     return output
 
@@ -126,8 +129,8 @@ class StateMachine:
                     # Draw bounding rectangle or perform further processing on the detected object
                     x, y, w, h = cv2.boundingRect(cnts)
                     cv2.rectangle(self.cv_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            cv2.imshow("states", self.cv_image)
-            cv2.waitKey(1)
+            #cv2.imshow("states", self.cv_image)
+            #cv2.waitKey(1)
             if (cv2.countNonZero(self.state_data1) > 1000 and not self.yoda_wait) or (filtered_cnts and self.yoda_wait):
                 self.frame_counter = 0
             else:
@@ -222,7 +225,7 @@ class StateMachine:
             print("CLUE ADDED")
             
             
-            
+    
     def reset_pink_cooldown(self, event):
         self.pink_cooldown = False
 
@@ -233,6 +236,7 @@ class StateMachine:
         self.cur_clue = []
         self.clue_count +=1
         print(f'Moving to CLUE #{self.clue_count+1}')
+        
 
     def set_yoda_wait(self, event):
         self.yoda_wait = True
@@ -342,8 +346,26 @@ def camera_callback(data):
             #     # Reorder 'src' points to match the 'dest' format
                 # approx
             if len(approx) == 4:
-                src = np.array([approx[0], approx[3], approx[1], approx[2]], dtype=np.float32)
-            #     print(src)
+                
+                centroid = np.mean(approx, axis=0)[0]
+
+                #get x cord of centroid 
+                x = centroid[0]
+                #get y cord of centroid
+                y = centroid[1]
+
+                def sort_key(point):
+                    angle = np.arctan2(point[0][1] - centroid[1], point[0][0] - centroid[0])
+                    return (angle + 2 * np.pi) % (2 * np.pi)
+                # Sort the source points based on their relative positions to match the destination points format
+                sorted_approx = sorted(approx, key=sort_key)
+                sorted_approx = np.array(sorted_approx)
+
+            #     # Reorder 'src' points to match the 'dest' format
+                # approx
+                #print(sorted_approx)
+                src = np.array([sorted_approx[2], sorted_approx[3], sorted_approx[1], sorted_approx[0]], dtype=np.float32)
+
 
                 width = 600
                 height= 400
@@ -354,15 +376,36 @@ def camera_callback(data):
 
                 M = cv2.getPerspectiveTransform(src,dest)
                 clue = cv2.warpPerspective(cv_image,M,(width, height),flags=cv2.INTER_LINEAR)
+                #cv2.imshow("cam", cv_image)
+                #cv2.imshow("clue", clue)
 
                 gray_clue = cv2.cvtColor(clue, cv2.COLOR_BGR2GRAY)
                 clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
                 gray_clue = clahe.apply(gray_clue)
+                #gray_clue = cv2.equalizeHist(gray_clue)
+                # perform threshold
                 sharpen_kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
                 sharpen = cv2.filter2D(gray_clue, -1, sharpen_kernel)
+
+                # # remove noise / close gaps
+                # kernel =  np.ones((5,5),np.uint8)
+                # noise = cv2.morphologyEx(sharpen, cv2.MORPH_CLOSE, kernel)
+
+                # # dilate result to make characters more solid
+                # kernel2 =  np.ones((3,3),np.uint8)
+                # dilate = cv2.dilate(noise,kernel2,iterations = 1)
+
                 retr, mask2 = cv2.threshold(gray_clue, 100, 255, cv2.THRESH_BINARY_INV)
+                # #45 equihist
+
+                # #invert to get black text on white background
                 result = cv2.bitwise_not(mask2)
+                cv2.imshow("result", result)
+                cv2.waitKey(1)
                 state_machine.event_occurred("CLUE",result)
+                print("Update result")
+                
+                
     
     if cv2.countNonZero(mask_pink) > 25000:
             state_machine.event_occurred("PINK",None)

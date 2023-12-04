@@ -118,7 +118,7 @@ class Imitate:
         filtered_cnts = [contour for contour in cnts if cv2.contourArea(contour) > 1000]
         #print(cv2.countNonZero(num_white_pixels))
         print(f'clue cout; {cv2.countNonZero(mask_clue)}')
-        if num_white_pixels > 15000 and filtered_cnts:
+        if num_white_pixels > 12500 and filtered_cnts:
             for c in filtered_cnts:
                 epsilon = 0.08 * cv2.arcLength(c, True)
                 approx = cv2.approxPolyDP(c, epsilon, True)
@@ -137,19 +137,30 @@ class Imitate:
         #     #print(src)
             
 
-        #     # Rearrange the corners based on the assigned indicesght
-        #     centroid = corners[0]
-        #     def sort_key(point):
-        #         angle = np.arctan2(point[1] - centroid[1], point[0] - centroid[0])
-        #         return (angle + 2 * np.pi) % (2 * np.pi)
-        #     # Sort the source points based on their relative positions to match the destination points format
-        #     sorted_src = sorted(src, key=sort_key)
-        #     sorted_src = np.array(sorted_src)
+            # Rearrange the corners based on the assigned indicesght
+
+            centroid = np.mean(approx, axis=0)[0]
+            print(centroid)
+            print(centroid.shape)
+            #get x cord of centroid 
+            x = centroid[0]
+            #get y cord of centroid
+            y = centroid[1]
+            print(x)
+            print(y)
+            print(approx)
+            def sort_key(point):
+                angle = np.arctan2(point[0][1] - centroid[1], point[0][0] - centroid[0])
+                return (angle + 2 * np.pi) % (2 * np.pi)
+            # Sort the source points based on their relative positions to match the destination points format
+            sorted_approx = sorted(approx, key=sort_key)
+            sorted_approx = np.array(sorted_approx)
 
         #     # Reorder 'src' points to match the 'dest' format
             # approx
-            src = np.array([approx[0], approx[3], approx[1], approx[2]], dtype=np.float32)
-        #     print(src)
+            print(sorted_approx)
+            src = np.array([sorted_approx[2], sorted_approx[3], sorted_approx[1], sorted_approx[0]], dtype=np.float32)
+            
 
             width = 600
             height= 400
@@ -160,6 +171,7 @@ class Imitate:
 
             M = cv2.getPerspectiveTransform(src,dest)
             clue = cv2.warpPerspective(cv_image,M,(width, height),flags=cv2.INTER_LINEAR)
+            cv2.imshow("clue", clue)
 
             gray_clue = cv2.cvtColor(clue, cv2.COLOR_BGR2GRAY)
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
@@ -184,37 +196,38 @@ class Imitate:
 
             # #invert to get black text on white background
             result = cv2.bitwise_not(mask2)
+            cv2.imshow("result", result)
 
             
             # for corner in src:
             #     x, y = int(corner[0]), int(corner[1])
             #     cv2.circle(cv_image,(x,y), 2, (0,255,0), -1)  # -1 signifies filled circle
         
-        # Get the largest contour (assumed to be the white line)
-        contours, _ = cv2.findContours(mask_pink, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # # Get the largest contour (assumed to be the white line)
+        # contours, _ = cv2.findContours(mask_pink, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        largest_contour = max(contours, key=cv2.contourArea)
+        # largest_contour = max(contours, key=cv2.contourArea)
         
-        # Get orientation of the line using its bounding rectangle
-        rect = cv2.minAreaRect(largest_contour)
-        angle = rect[2]
-        if angle>45:
-            angle = angle-90
-        # Rotate the robot to align with the line (example, adjust as needed)
-        # Your robot control logic here to adjust orientation based on 'angle'
-        # For simulation purposes, let's print the angle
-        print("Angle to straighten:", angle)
-        if 20>angle>1:
-            print("RIGHT")
+        # # Get orientation of the line using its bounding rectangle
+        # rect = cv2.minAreaRect(largest_contour)
+        # angle = rect[2]
+        # if angle>45:
+        #     angle = angle-90
+        # # Rotate the robot to align with the line (example, adjust as needed)
+        # # Your robot control logic here to adjust orientation based on 'angle'
+        # # For simulation purposes, let's print the angle
+        # print("Angle to straighten:", angle)
+        # if 20>angle>1:
+        #     print("RIGHT")
 
-        elif -20<angle <-1:
-            print("LEFT")
-        elif -1<angle<1:
-            print ("STRAIGHT")
+        # elif -20<angle <-1:
+        #     print("LEFT")
+        # elif -1<angle<1:
+        #     print ("STRAIGHT")
         
-        cv2.imshow("gray", mask_yoda2)
+        #cv2.imshow("gray", mask_yoda2)
         cv2.imshow("cut", mask_clue)
-        cv2.imshow("hsv", cv_image)
+        #cv2.imshow("hsv", cv_image)
         # cv2.imshow("blue", mask_blue)
         # cv2.imshow("out", result)
         # cv2.imshow("white", mask_white)
