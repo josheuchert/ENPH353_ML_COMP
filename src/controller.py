@@ -10,6 +10,8 @@ import cv2
 import numpy as np
 import tensorflow as tf
 
+from collections import Counter
+
 # import keras
 # from keras.models import load_model
 # drive_model = load_model('test6.h5',compile=False)
@@ -44,6 +46,13 @@ input_details_yoda = interpreter_yoda.get_input_details()[0]
 output_details_yoda = interpreter_yoda.get_output_details()[0]
 print("Loaded Yoda")
 
+interpreter_clues = tf.lite.Interpreter(model_path='quantized_model_clues3.tflite')
+interpreter_clues.allocate_tensors()
+input_details_clues = interpreter_clues.get_input_details()[0]
+output_details_clues = interpreter_clues.get_output_details()[0]
+print("Loaded Clue Interpreter")
+
+
 def run_model(img, interpreter, input_details, output_details, steer):
     img_aug = img.reshape((1, 90, 160, 1)).astype(input_details["dtype"])
     interpreter.set_tensor(input_details_road["index"], img_aug)
@@ -57,6 +66,136 @@ def run_model(img, interpreter, input_details, output_details, steer):
 def denormalize_value(normalized_value, min_val, max_val):
     return (normalized_value * (max_val - min_val)) + min_val
 
+# Clue Detect Functions
+possible_keys = {"SIZE  " : 1, "VICTIM" : 2, "CRIME " : 3, "TIME  " : 4, "PLACE " : 5, "MOTIVE" : 6, "WEAPON" : 7, "BANDIT" : 8}
+
+def check_if_space(letter):
+    # Count non-white pixels
+    non_white_pixels = np.sum(letter < 255)
+
+    # Calculate percentage of non-white pixels
+    total_pixels = np.prod(letter.shape)
+    non_white_percentage = (non_white_pixels / total_pixels)
+
+    if non_white_percentage < 0.13:
+        return True
+    else:
+        return False
+
+# Go from char to one hot
+def convert_to_one_hot(Y):
+    Y = np.array([ord(char) - ord('A') if char.isalpha() else (int(char)+26) for char in Y])
+    Y = np.eye(36)[Y.reshape(-1)]
+    return Y
+
+# Go from one hot / probabilities to a character
+def convert_from_one_hot(one_hot_labels):
+    # Convert the one-hot encoded labels back to their original representation
+    # Assuming the labels were one-hot encoded using the provided convert_to_one_hot function
+    decoded_labels = np.argmax(one_hot_labels, axis=1)
+
+    # Convert the numerical representation back to the original characters or numbers
+    decoded_labels = [chr(index + ord('A')) if index < 26 else str(index - 26) for index in decoded_labels]
+
+    return decoded_labels
+
+def clue_detect(clue_board):
+
+    # detect the key
+    key_let1 = clue_board[40:115, 250:295]
+    key_let2 = clue_board[40:115, 295:340]
+    key_let3 = clue_board[40:115, 340:385]
+    key_let4 = clue_board[40:115, 385:430]
+    key_let5 = clue_board[40:115, 430:475]
+    key_let6 = clue_board[40:115, 475:520]
+
+    letters = [key_let1, key_let2, key_let3, key_let4, key_let5, key_let6]
+
+    key_array = []
+
+    for letter in letters:
+        #letter = cv2.cvtColor(letter, cv2.COLOR_BGR2GRAY)
+        #print(letter.shape)
+        #cv2_imshow(letter)
+
+        # check if white space
+        if (check_if_space(letter)):
+            key_array.append(' ')
+
+        else:
+
+            # regular version
+
+            #input_letter = np.expand_dims(letter, axis=-1)
+            #input_letter = np.expand_dims(input_letter, axis=0)
+            #pred_letter = convert_from_one_hot(conv_model.predict(input_letter))
+
+            # quantized version
+
+            input_letter = np.expand_dims(letter, axis=0)
+            input_letter = np.expand_dims(input_letter, axis=-1)
+            input_letter = input_letter.astype(np.float32)
+
+            #
+            interpreter_clues.set_tensor(input_details_clues["index"], input_letter)
+            interpreter_clues.invoke()
+            output = interpreter_clues.get_tensor(output_details_clues["index"])
+
+            pred_letter = convert_from_one_hot(output)[0]
+            key_array.append(pred_letter)
+
+    key = ''.join(key_array)
+    print(f"Key = {key}")
+
+    clue_let1 = clue_board[260:335, 30:75]
+    clue_let2 = clue_board[260:335, 75:120]
+    clue_let3 = clue_board[260:335, 120:165]
+    clue_let4 = clue_board[260:335, 165:210]
+    clue_let5 = clue_board[260:335, 210:255]
+    clue_let6 = clue_board[260:335, 255:300]
+    clue_let7 = clue_board[260:335, 300:345]
+    clue_let8 = clue_board[260:335, 345:390]
+    clue_let9 = clue_board[260:335, 390:435]
+    clue_let10 = clue_board[260:335, 435:480]
+    clue_let11 = clue_board[260:335, 480:525]
+    clue_let12 = clue_board[260:335, 525:570]
+
+    letters = [clue_let1, clue_let2, clue_let3, clue_let4, clue_let5, clue_let6,
+                clue_let7, clue_let8, clue_let9, clue_let10, clue_let11, clue_let12]
+
+    value_array = []
+
+    for letter in letters:
+        #letter = cv2.cvtColor(letter, cv2.COLOR_BGR2GRAY)
+        #cv2_imshow(letter)
+
+        # check if white space
+        if (check_if_space(letter)):
+            value_array.append(' ')
+        else:
+            # regular version
+
+            #input_letter = np.expand_dims(letter, axis=-1)
+            #input_letter = np.expand_dims(input_letter, axis=0)
+            #pred_letter = convert_from_one_hot(conv_model.predict(input_letter))
+
+            # quantized version
+
+            input_letter = np.expand_dims(letter, axis=0)
+            input_letter = np.expand_dims(input_letter, axis=-1)
+            input_letter = input_letter.astype(np.float32)
+
+            interpreter_clues.set_tensor(input_details_clues["index"], input_letter)
+            interpreter_clues.invoke()
+            output = interpreter_clues.get_tensor(output_details_clues["index"])
+
+            pred_letter = convert_from_one_hot(output)[0]
+            value_array.append(pred_letter)
+
+    value = ''.join(value_array)
+    print(f"Value = {value}")
+
+    return key, value
 
 
 # Clue message structure 
@@ -96,13 +235,16 @@ class StateMachine:
         self.clues=[]
         self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=75, varThreshold=50, detectShadows=False)
 
+        # Clue Detect Variables
+        self.good_values = []
+
     def road_state(self):
         z = run_model(self.drive_input,interpreter_road,input_details_road,output_details_road,2.2)
         pub_cmd_vel(.5,z)
 
     def grass_state(self):
         z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,2.5)
-        pub_cmd_vel(.55,z)
+        pub_cmd_vel(.6,z)
 
     def yoda_drive_state(self):
         z = run_model(self.drive_input,interpreter_yoda,input_details_yoda,output_details_yoda,3)
@@ -171,7 +313,7 @@ class StateMachine:
         else:
             self.frame_counter +=1 
             print(self.frame_counter)
-        if self.frame_counter > 5:
+        if self.frame_counter > 10:
             self.frame_counter = 0
             holder = self.current_state
             self.current_state = "ROAD"
@@ -181,6 +323,31 @@ class StateMachine:
     def vehicle_state(self):
         z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain)
         pub_cmd_vel(.4,z)
+
+    def publish_clues(self):
+        print("Publishing Clues")
+        for clue_set in self.clues:
+            self.good_values = []
+            for clue in clue_set:
+            
+                key, value = clue_detect(clue)
+                if key in possible_keys:
+                    self.good_values.append(value)
+                    submit_key = key
+                    
+            if self.good_values:
+                # Use Counter to count occurrences of each element in the list
+                counts = Counter(self.good_values)
+
+                # Find the most common element and its count
+                submit_value, count = counts.most_common(1)[0]
+
+                print(f"Submitting {submit_key} = {submit_value}")
+                pub_clue(id,password,possible_keys[submit_key],submit_value)
+            else:
+                print("No good values found")
+
+
 
 
     def event_occurred(self, event, data):
@@ -193,7 +360,9 @@ class StateMachine:
             if holder == "ROAD": 
                 self.current_state = "GRASS"
                 self.road_state()
-            elif holder == "GRASS": 
+            elif holder == "GRASS":
+                #pub_cmd_vel(0,0)
+                #self.publish_clues()
                 self.current_state = "YODA_WAIT"
             elif holder == "YODA_DRIVE": 
                 self.current_state = "MOUNTAIN"
@@ -223,6 +392,9 @@ class StateMachine:
                 rospy.Timer(rospy.Duration(2.5), self.update_clue_count, oneshot=True)
             self.cur_clue.append(data)
             print("CLUE ADDED")
+            if self.clue_count == 6:
+                self.publish_clues()
+                print("GAME OVER")
             
             
     
@@ -257,8 +429,8 @@ class StateMachine:
         if angle>1:
             pub_cmd_vel(0,-1)
             print("RIGHT")
-        elif angle <-1:
-            pub_cmd_vel(0,1)
+        elif angle <-.3:
+            pub_cmd_vel(0,.3)
             print("LEFT")
         else:
             print("ALIGNED")
