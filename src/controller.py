@@ -34,7 +34,7 @@ input_details_grass = interpreter_grass.get_input_details()[0]
 output_details_grass = interpreter_grass.get_output_details()[0]
 print("Loaded Grass")
 
-interpreter_mountain = tf.lite.Interpreter(model_path='quantized_model_mountain3.tflite')
+interpreter_mountain = tf.lite.Interpreter(model_path='quantized_model_mountain4.tflite')
 interpreter_mountain.allocate_tensors()
 input_details_mountain = interpreter_mountain.get_input_details()[0]
 output_details_mountain = interpreter_mountain.get_output_details()[0]
@@ -58,7 +58,7 @@ def run_model(img, interpreter, input_details, output_details, steer):
     interpreter.set_tensor(input_details_road["index"], img_aug)
     interpreter.invoke()
     output = interpreter.get_tensor(output_details["index"])[0]
-    print(output)
+    #print(output)
     output = denormalize_value(output, -steer, steer)
     return output
 
@@ -219,7 +219,7 @@ def pub_cmd_vel(x,z):
 class StateMachine:
     def __init__(self):
         self.current_state = "ROAD"
-        print(f'Starting state:{self.current_state}')
+        print(f'Starting state:{self.road_state}')
         self.drive_input = None
         self.pink_cooldown = False
         self.ped_xing = False
@@ -367,7 +367,8 @@ class StateMachine:
                 #pub_cmd_vel(0,0)
                 #self.publish_clues()
                 self.current_state = "YODA_WAIT"
-            elif holder == "YODA_DRIVE": 
+            elif holder == "YODA_DRIVE":
+                #self.align() 
                 self.current_state = "MOUNTAIN"
                 self.mountain_state()
             print(f'{holder} -------> {self.current_state}')
@@ -398,8 +399,6 @@ class StateMachine:
             if self.clue_count == 7:
                 self.publish_clues()
                 print("GAME OVER")
-            if self.clue_count == 2:
-                self.current_state = "VEHICLE"
             
             
     
@@ -581,7 +580,7 @@ def camera_callback(data):
                 cv2.waitKey(1)
                 state_machine.event_occurred("CLUE",result)
                 print("Update result")
-                
+
 
                
 
@@ -594,7 +593,7 @@ def camera_callback(data):
     if cv2.countNonZero(mask_red) > 30000:
             state_machine.event_occurred("RED",None)
 
-    if (cv2.countNonZero(mask_yoda2) > 4000 and state_machine.current_state == "YODA_DRIVE"):
+    if (cv2.countNonZero(mask_yoda2) > 6000 and state_machine.current_state == "YODA_DRIVE"):
             state_machine.event_occurred("YODA_STOP",None)
 
     state_machine.cv_image = cv_image
