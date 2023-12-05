@@ -34,7 +34,7 @@ input_details_grass = interpreter_grass.get_input_details()[0]
 output_details_grass = interpreter_grass.get_output_details()[0]
 print("Loaded Grass")
 
-interpreter_mountain = tf.lite.Interpreter(model_path='quantized_model_mountain4.tflite')
+interpreter_mountain = tf.lite.Interpreter(model_path='quantized_model_mountain7.tflite')
 interpreter_mountain.allocate_tensors()
 input_details_mountain = interpreter_mountain.get_input_details()[0]
 output_details_mountain = interpreter_mountain.get_output_details()[0]
@@ -58,7 +58,7 @@ def run_model(img, interpreter, input_details, output_details, steer):
     interpreter.set_tensor(input_details_road["index"], img_aug)
     interpreter.invoke()
     output = interpreter.get_tensor(output_details["index"])[0]
-    #print(output)
+    print(output)
     output = denormalize_value(output, -steer, steer)
     return output
 
@@ -219,7 +219,7 @@ def pub_cmd_vel(x,z):
 class StateMachine:
     def __init__(self):
         self.current_state = "ROAD"
-        print(f'Starting state:{self.road_state}')
+        print(f'Starting state:{self.current_state}')
         self.drive_input = None
         self.pink_cooldown = False
         self.ped_xing = False
@@ -278,12 +278,12 @@ class StateMachine:
             else:
                 self.frame_counter +=1 
                 print(self.frame_counter)
+                self.pink_cooldown = True
             if self.frame_counter > 10:
                 self.frame_counter = 0
                 holder = self.current_state
                 if not self.yoda_wait:
                     self.current_state = "YODA_DRIVE"
-                    self.pink_cooldown = True
                     rospy.Timer(rospy.Duration(7), self.reset_pink_cooldown, oneshot=True)
                     rospy.Timer(rospy.Duration(5), self.set_yoda_wait, oneshot=True)
                 else:
@@ -306,7 +306,7 @@ class StateMachine:
         fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
         contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # Iterate through contours and filter based on size (area)
-        filtered_cnts = [contour for contour in contours if cv2.contourArea(contour) > 50]
+        filtered_cnts = [contour for contour in contours if cv2.contourArea(contour) > 40]
         for cnts in filtered_cnts:
             # Draw bounding rectangle or perform further processing on the detected object
             x, y, w, h = cv2.boundingRect(cnts)
@@ -316,7 +316,7 @@ class StateMachine:
         else:
             self.frame_counter +=1 
             print(self.frame_counter)
-        if self.frame_counter > 10:
+        if self.frame_counter > 13:
             self.frame_counter = 0
             holder = self.current_state
             self.current_state = "ROAD"
@@ -407,7 +407,9 @@ class StateMachine:
             holder = self.current_state
             if holder == "YODA_DRIVE": 
                 self.current_state = "YODA_WAIT"
+                
             print(f'{holder} -------> {self.current_state}')
+            
 
         if event == "CLUE":
             if not self.clue_cooldown:
@@ -415,7 +417,7 @@ class StateMachine:
                 rospy.Timer(rospy.Duration(2), self.update_clue_count, oneshot=True)
             self.cur_clue.append(data)
             print("CLUE ADDED")
-            if self.clue_count == 7:
+            if self.clue_count == 5:
                 self.publish_clues()
                 print("GAME OVER")
             
@@ -496,8 +498,8 @@ def camera_callback(data):
     upper_vehicle = np.array([10,10,249])
     lower_yoda1 = np.array([165,10,14])
     upper_yoda1 = np.array([186,170,170])
-    lower_yoda2 = np.array([0,0,0])
-    upper_yoda2 = np.array([9,90,80])
+    lower_yoda2 = np.array([40,88,40])
+    upper_yoda2 = np.array([50,100,50])
     try:
         cv_image = br.imgmsg_to_cv2(data, "bgr8")
     except CvBridgeError as e:
@@ -521,7 +523,7 @@ def camera_callback(data):
     mask_ped = cv2.inRange(hsv, lower_ped, upper_ped)
     mask_vehicle = cv2.inRange(hsv, lower_vehicle, upper_vehicle)
     mask_yoda1 = cv2.inRange(hsv, lower_yoda1, upper_yoda1)
-    mask_yoda2 = cv2.inRange(hsv, lower_yoda2, upper_yoda2)
+    mask_yoda2 = cv2.inRange(cv_image, lower_yoda2, upper_yoda2)
 
     cnts, _ = cv2.findContours(mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cv2.fillPoly(mask_blue, cnts, (255,255,255))
@@ -612,7 +614,7 @@ def camera_callback(data):
     if cv2.countNonZero(mask_red) > 30000:
             state_machine.event_occurred("RED",None)
 
-    if (cv2.countNonZero(mask_yoda2) > 6000 and state_machine.current_state == "YODA_DRIVE"):
+    if (cv2.countNonZero(mask_yoda2) > 10 and state_machine.current_state == "YODA_DRIVE"):
             state_machine.event_occurred("YODA_STOP",None)
 
     state_machine.cv_image = cv_image
