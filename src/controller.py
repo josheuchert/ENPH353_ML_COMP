@@ -12,6 +12,17 @@ import tensorflow as tf
 
 from collections import Counter
 
+# data collection
+import os
+import csv
+import re
+
+# Compute the file path from home
+csv_file_path = '/home/fizzer/ros_ws/src/2023_competition/enph353/enph353_gazebo/scripts/plates.csv'
+output_path = '/home/fizzer/real_plates/run13/'
+
+
+
 # import keras
 # from keras.models import load_model
 # drive_model = load_model('test6.h5',compile=False)
@@ -22,13 +33,13 @@ from collections import Counter
 # drive_model.summary()
 
 
-interpreter_road = tf.lite.Interpreter(model_path='quantized_model_road2.tflite')
+interpreter_road = tf.lite.Interpreter(model_path='quantized_model_road3.tflite')
 interpreter_road.allocate_tensors()
 input_details_road = interpreter_road.get_input_details()[0]
 output_details_road = interpreter_road.get_output_details()[0]
 print("Loaded Road")
 
-interpreter_grass = tf.lite.Interpreter(model_path='quantized_model_grass2.tflite')
+interpreter_grass = tf.lite.Interpreter(model_path='quantized_model_grass7.tflite')
 interpreter_grass.allocate_tensors()
 input_details_grass = interpreter_grass.get_input_details()[0]
 output_details_grass = interpreter_grass.get_output_details()[0]
@@ -52,13 +63,17 @@ input_details_clues = interpreter_clues.get_input_details()[0]
 output_details_clues = interpreter_clues.get_output_details()[0]
 print("Loaded Clue Interpreter")
 
+path = os.path.join(output_path)
+print(path)
+os.mkdir(path, mode = 0o777)
+os.chdir(path)
 
 def run_model(img, interpreter, input_details, output_details, steer):
     img_aug = img.reshape((1, 90, 160, 1)).astype(input_details["dtype"])
     interpreter.set_tensor(input_details_road["index"], img_aug)
     interpreter.invoke()
     output = interpreter.get_tensor(output_details["index"])[0]
-    print(output)
+    #print(output)
     output = denormalize_value(output, -steer, steer)
     return output
 
@@ -177,7 +192,7 @@ def clue_detect(clue_board):
 
             #input_letter = np.expand_dims(letter, axis=-1)
             #input_letter = np.expand_dims(input_letter, axis=0)
-            #pred_letter = convert_from_one_hot(conv_model.predict(input_letter))
+            #pred_letter = conSIZE,V COUNTLESSert_from_one_hot(conv_model.predict(input_letter))
 
             # quantized version
 
@@ -351,7 +366,9 @@ class StateMachine:
         print("Publishing Clues")
         for clue_set in self.clues:
             self.good_values = []
-            for clue in clue_set:
+            
+            clue_set2 = clue_set[::-1]
+            for clue in clue_set2:
             
                 key, value = clue_detect(clue)
                 if key in possible_keys:
@@ -362,13 +379,47 @@ class StateMachine:
                 # Use Counter to count occurrences of each element in the list
                 counts = Counter(self.good_values)
 
-                # Find the most common element and its count
+                # Find the most common element and its count - make it so its the most recent most common
                 submit_value, count = counts.most_common(1)[0]
 
                 print(f"Submitting {submit_key} = {submit_value}")
                 pub_clue(id,password,possible_keys[submit_key],submit_value)
             else:
                 print("No good values found")
+        
+        # Save clues with correct names to files
+        #if not os.path.exists(output_path):
+        #    os.makedirs(output_path)
+
+        with open(csv_file_path, 'r', newline='') as file:
+            reader = csv.reader(file)
+            rows = list(reader)
+            #print(rows.shape)
+            
+            for i, clue_set in enumerate(self.clues):
+                
+                row = []
+                if 0 <= i <= len(rows):
+                    row = rows[i]
+                else:
+                    print(f"Row number {i} is out of range.")
+                
+                print(row)
+                #pattern = r'([^,]+),(.+)'
+                #match = re.match(pattern, row)
+
+                key = row[0]
+                value = row[1]
+
+                for j, clue in enumerate(clue_set):
+
+                    filename = f'plate{j}_{key}_{value}.png'
+                    filename = filename.replace(' ', '_')
+                    file_output = output_path + filename
+                    # Write the image using the specified filename
+                    print(f"DOWNLOADING FILE: {filename}")
+                    #cv2.imshow(clue)
+                    cv2.imwrite(filename, clue)
 
 
     def event_occurred(self, event, data):
@@ -385,6 +436,8 @@ class StateMachine:
                 #pub_cmd_vel(0,0)
                 #self.publish_clues()
                 self.current_state = "YODA_WAIT"
+                pub_cmd_vel(0,0)
+                self.publish_clues()
             elif holder == "YODA_DRIVE":
                 #self.align() 
                 self.current_state = "MOUNTAIN"
@@ -417,9 +470,11 @@ class StateMachine:
                 rospy.Timer(rospy.Duration(2), self.update_clue_count, oneshot=True)
             self.cur_clue.append(data)
             print("CLUE ADDED")
-            if self.clue_count == 5:
-                self.publish_clues()
-                print("GAME OVER")
+            #if self.clue_count == 5:
+                #self.update_clue_count(None)
+                #self.publish_clues()
+            
+            
             
             
     
@@ -431,14 +486,19 @@ class StateMachine:
         self.clues.append(self.cur_clue)
         print(len(self.cur_clue))
         self.cur_clue = []
-        # if self.clue_count == 2:
-        #     pub_cmd_vel(0,0)
-        #     holder = self.current_state
-        #     if holder == "ROAD": 
-        #         self.current_state = "VEHICLE"
-        #     print(f'{holder} -------> {self.current_state}')
+        if self.clue_count == 7:
+            #pub_cmd_vel(0,0)
+            holder = self.current_state
+            if holder == "MOUNTAIN": 
+                #self.current_state = "FINISH"
+                self.publish_clues()
+                pub_clue(id,password,-1,"NA")
+            print(f'{holder} -------> {self.current_state}')
         self.clue_count +=1
         print(f'Moving to CLUE #{self.clue_count+1}')
+
+        # self.publish_clues()
+
         
 
     def set_yoda_wait(self, event):
@@ -603,10 +663,10 @@ def camera_callback(data):
 
                 # #invert to get black text on white background
                 result = cv2.bitwise_not(mask2)
-                cv2.imshow("result", result)
-                cv2.waitKey(1)
+                #cv2.imshow("result", result)
+                #cv2.waitKey(1)
                 state_machine.event_occurred("CLUE",result)
-                print("Update result")
+                #print("Update result")
 
     if cv2.countNonZero(mask_pink) > 25000:
             state_machine.event_occurred("PINK",None)
