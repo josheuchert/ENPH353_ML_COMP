@@ -34,11 +34,13 @@ output_path = '/home/fizzer/real_plates/run13/'
 
 
 interpreter_road = tf.lite.Interpreter(model_path='quantized_model_road3.tflite')
+interpreter_road = tf.lite.Interpreter(model_path='quantized_model_road3.tflite')
 interpreter_road.allocate_tensors()
 input_details_road = interpreter_road.get_input_details()[0]
 output_details_road = interpreter_road.get_output_details()[0]
 print("Loaded Road")
 
+interpreter_grass = tf.lite.Interpreter(model_path='quantized_model_grass8.tflite')
 interpreter_grass = tf.lite.Interpreter(model_path='quantized_model_grass7.tflite')
 interpreter_grass.allocate_tensors()
 input_details_grass = interpreter_grass.get_input_details()[0]
@@ -254,19 +256,19 @@ class StateMachine:
         self.good_values = []
 
     def road_state(self):
-        z = run_model(self.drive_input,interpreter_road,input_details_road,output_details_road,2.2)
-        pub_cmd_vel(.5,z)
+        z = run_model(self.drive_input,interpreter_road,input_details_road,output_details_road,2.8)
+        pub_cmd_vel(.7,z)
 
     def grass_state(self):
-        z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,2.5)
-        pub_cmd_vel(.55,z)
+        z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,2.9)
+        pub_cmd_vel(.7,z)
 
     def yoda_drive_state(self):
         z = run_model(self.drive_input,interpreter_yoda,input_details_yoda,output_details_yoda,3)
         if self.yoda_wait:
-            pub_cmd_vel(.6,z)
-        else:
             pub_cmd_vel(.8,z)
+        else:
+            pub_cmd_vel(1,z)
 
     def yoda_wait_state(self):
         pub_cmd_vel(0,0)
@@ -470,9 +472,9 @@ class StateMachine:
                 rospy.Timer(rospy.Duration(2), self.update_clue_count, oneshot=True)
             self.cur_clue.append(data)
             print("CLUE ADDED")
-            #if self.clue_count == 5:
-                #self.update_clue_count(None)
-                #self.publish_clues()
+            if self.clue_count == 5:
+                self.publish_clues()
+                print("GAME OVER")
             
             
             
@@ -517,15 +519,25 @@ class StateMachine:
         # Your robot control logic here to adjust orientation based on 'angle'
         # For simulation purposes, let's print the angle
         print("Angle to straighten:", angle)
-        if angle>1:
-            pub_cmd_vel(0,-1)
+        if (state_machine.current_state == "YODA_WAIT"):
+            thresh1 = .3
+            thresh2 = -.3
+        else:
+            thresh1 = -.3
+            thresh2 = -.6
+        if angle > thresh1:
+            pub_cmd_vel(0,-.3)
             print("RIGHT")
-        elif angle <-.3:
+            self.frame_counter+=1
+        elif angle < thresh2:
             pub_cmd_vel(0,.3)
             print("LEFT")
+            self.frame_counter+=1
         else:
             print("ALIGNED")
-            self.aligned = True
+            if self.frame_counter > 2:
+                self.aligned = True
+                self.frame_counter=0
         
             
 
@@ -592,7 +604,7 @@ def camera_callback(data):
     cnts, _ = cv2.findContours(mask_clue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     filtered_cnts = [contour for contour in cnts if cv2.contourArea(contour) > 1000]
     
-    if cv2.countNonZero(mask_clue) > 14000 and filtered_cnts:
+    if cv2.countNonZero(mask_clue) > 13000 and filtered_cnts:
             print(cv2.countNonZero(mask_clue))
             approx = []
             for c in filtered_cnts:
