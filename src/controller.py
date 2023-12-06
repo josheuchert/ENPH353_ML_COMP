@@ -154,8 +154,12 @@ def clue_detect(clue_board):
             interpreter_clues.invoke()
             output = interpreter_clues.get_tensor(output_details_clues["index"])
             pred_letter = convert_from_one_hot(output)[0]
-            if pred_letter == 'Q' or pred_letter == 'O':
+            if pred_letter == 'Q':
                 print(output)
+                print(output.shape)
+                if output[0][14] > 1e-4:
+                    pred_letter = 'O'
+                    print("SWAPPED")
             key_array.append(pred_letter)
 
     key = ''.join(key_array)
@@ -204,6 +208,12 @@ def clue_detect(clue_board):
             output = interpreter_clues.get_tensor(output_details_clues["index"])
 
             pred_letter = convert_from_one_hot(output)[0]
+            if pred_letter == 'Q':
+                print(output)
+                print(output.shape)
+                if output[0][14] > 1e-4:
+                    pred_letter = 'O'
+                    print("SWAPPED")
             value_array.append(pred_letter)
 
     value = ''.join(value_array)
@@ -351,6 +361,7 @@ class StateMachine:
             self.frame_counter = 0
             holder = self.current_state
             self.current_state = "ROAD"
+            pub_cmd_vel(.1,0)
             print(f'{holder} -------> {self.current_state}')
              
 
