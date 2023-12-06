@@ -247,6 +247,7 @@ class StateMachine:
         self.clue_cooldown = False
         self.mountain_boost = False
         self.bridge_boost = False
+        self.started = False
         self.cur_clue = []
         self.clues=[]
         self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=100, varThreshold=50, detectShadows=False)
@@ -255,15 +256,20 @@ class StateMachine:
         self.good_values = []
 
     def road_state(self):
-        z = run_model(self.drive_input,interpreter_road,input_details_road,output_details_road,2.8)#2.8
-        pub_cmd_vel(.7,z)
+        if not self.started:
+            pub_clue(id,password,0,"NA")
+            rospy.Timer(rospy.Duration(120), self.end_run, oneshot=True)
+            self.started = True
+        else:
+            z = run_model(self.drive_input,interpreter_road,input_details_road,output_details_road,2.8)#2.8
+            pub_cmd_vel(.7,z)
 
     def grass_state(self):
         # if self.bridge_boost:
         #     z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,3)
         #     pub_cmd_vel(1,z)
         # else:
-        z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,4)
+        z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,4) #4
         pub_cmd_vel(.7,z)
 
     def yoda_drive_state(self):
@@ -320,8 +326,8 @@ class StateMachine:
         #     self.align()
         # else:
         if self.mountain_boost:
-            z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain,2.8)
-            pub_cmd_vel(.7,z)
+            z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain,2.9)
+            pub_cmd_vel(.65,z)
         else:
             z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain,2.7)
             pub_cmd_vel(.5,z) # mountain not sped up works consistently 
@@ -374,12 +380,13 @@ class StateMachine:
 
     def publish_clues(self):
         print("Publishing Clues")
-        for clue_set in self.clues:
+        for i, clue_set in enumerate(self.clues):
             self.good_values = []
             
             clue_set2 = clue_set[::-1]
-            for clue in clue_set2:
-            
+            clue_set3 = clue_set2[:5]
+            for clue in clue_set3:
+                
                 key, value = clue_detect(clue)
                 if key in possible_keys:
                     self.good_values.append(value)
@@ -397,41 +404,50 @@ class StateMachine:
             else:
                 print("No good values found")
                 # Publish most recent value regardless (if any)
+                clue = clue_set2[0]
+                key, value = clue_detect(clue)
+                print(f"Submitting clue#{i+1} = {value}")
+                pub_clue(id,password,i+1,value)
+
         
         # Save clues with correct names to files
-        if not os.path.exists(output_path):
-           os.makedirs(output_path)
+        # if not os.path.exists(output_path):
+        #    os.makedirs(output_path)
 
-        with open(csv_file_path, 'r', newline='') as file:
-            reader = csv.reader(file)
-            rows = list(reader)
-            #print(rows.shape)
+        # with open(csv_file_path, 'r', newline='') as file:
+        #     reader = csv.reader(file)
+        #     rows = list(reader)
+        #     #print(rows.shape)
             
-            for i, clue_set in enumerate(self.clues):
+        #     for i, clue_set in enumerate(self.clues):
                 
-                row = []
-                if 0 <= i <= len(rows):
-                    row = rows[i]
-                else:
-                    print(f"Row number {i} is out of range.")
+        #         row = []
+        #         if 0 <= i <= len(rows):
+        #             row = rows[i]
+        #         else:
+        #             print(f"Row number {i} is out of range.")
                 
-                print(row)
-                #pattern = r'([^,]+),(.+)'
-                #match = re.match(pattern, row)
+        #         print(row)
+        #         #pattern = r'([^,]+),(.+)'
+        #         #match = re.match(pattern, row)
 
-                key = row[0]
-                value = row[1]
+        #         key = row[0]
+        #         value = row[1]
 
-                for j, clue in enumerate(clue_set):
+        #         for j, clue in enumerate(clue_set):
 
-                    filename = f'plate{j}_{key}_{value}.png'
-                    filename = filename.replace(' ', '_')
-                    file_output = output_path + filename
-                    # Write the image using the specified filename
-                    print(f"DOWNLOADING FILE: {filename}")
-                    #cv2.imshow(clue)
-                    cv2.imwrite(filename, clue)
+        #             filename = f'plate{j}_{key}_{value}.png'
+        #             filename = filename.replace(' ', '_')
+        #             file_output = output_path + filename
+        #             # Write the image using the specified filename
+        #             print(f"DOWNLOADING FILE: {filename}")
+        #             #cv2.imshow(clue)
+        #             cv2.imwrite(filename, clue)
 
+    def end_run(self, event):
+        print("ENDING RUN")
+        self.publish_clues()
+        pub_clue(id,password,-1,"NA")
 
     def event_occurred(self, event, data):
         # Callback function to handle the event
@@ -442,7 +458,7 @@ class StateMachine:
             holder = self.current_state
             if holder == "ROAD": 
                 self.current_state = "GRASS"
-                self.road_state()
+                self.grass_state()
             elif holder == "GRASS":
                 #pub_cmd_vel(0,0)
                 #self.publish_clues()
@@ -704,7 +720,7 @@ def camera_callback(data):
                 state_machine.event_occurred("CLUE",result)
                 #print("Update result")
 
-    if cv2.countNonZero(mask_pink) > 20000:
+    if cv2.countNonZero(mask_pink) > 15000:
             state_machine.event_occurred("PINK",None)
 
     if cv2.countNonZero(mask_red) > 30000:
@@ -754,6 +770,6 @@ subscribe()
 
 rate = rospy.Rate(10)
 
+
 while not rospy.is_shutdown():
-    pub_clue(id,password,0,"NA")
     rospy.spin()    
