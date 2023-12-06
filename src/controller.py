@@ -19,9 +19,7 @@ import re
 
 # Compute the file path from home
 csv_file_path = '/home/fizzer/ros_ws/src/2023_competition/enph353/enph353_gazebo/scripts/plates.csv'
-output_path = '/home/fizzer/real_plates/run32/'
-
-
+output_path = '/home/fizzer/new_plates/'
 
 # import keras
 # from keras.models import load_model
@@ -57,16 +55,16 @@ input_details_yoda = interpreter_yoda.get_input_details()[0]
 output_details_yoda = interpreter_yoda.get_output_details()[0]
 print("Loaded Yoda")
 
-interpreter_clues = tf.lite.Interpreter(model_path='quantized_clue4.tflite')
+interpreter_clues = tf.lite.Interpreter(model_path='quantized_model_clues3.tflite')
 interpreter_clues.allocate_tensors()
 input_details_clues = interpreter_clues.get_input_details()[0]
 output_details_clues = interpreter_clues.get_output_details()[0]
 print("Loaded Clue Interpreter")
 
-# path = os.path.join(output_path)
-# print(path)
+path = os.path.join(output_path)
+print(path)
 # os.mkdir(path, mode = 0o777)
-# os.chdir(path)
+os.chdir(path)
 
 def run_model(img, interpreter, input_details, output_details, steer):
     img_aug = img.reshape((1, 90, 160, 1)).astype(input_details["dtype"])
@@ -247,20 +245,26 @@ class StateMachine:
         self.frame_counter = 0 
         self.clue_count = 0
         self.clue_cooldown = False
+        self.mountain_boost = False
+        self.bridge_boost = False
         self.cur_clue = []
         self.clues=[]
-        self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=75, varThreshold=50, detectShadows=False)
+        self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=100, varThreshold=50, detectShadows=False)
 
         # Clue Detect Variables
         self.good_values = []
 
     def road_state(self):
-        z = run_model(self.drive_input,interpreter_road,input_details_road,output_details_road,2.8)
+        z = run_model(self.drive_input,interpreter_road,input_details_road,output_details_road,2.8)#2.8
         pub_cmd_vel(.7,z)
 
     def grass_state(self):
-        z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,2.5)
-        pub_cmd_vel(.55,z)
+        # if self.bridge_boost:
+        #     z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,3)
+        #     pub_cmd_vel(1,z)
+        # else:
+        z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,4)
+        pub_cmd_vel(.7,z)
 
     def yoda_drive_state(self):
         z = run_model(self.drive_input,interpreter_yoda,input_details_yoda,output_details_yoda,3)
@@ -278,20 +282,18 @@ class StateMachine:
             self.align()
         else:
             if self.yoda_wait:
-                if cv2.countNonZero(self.state_data1)>1:
+                fg_mask = self.bg_subtractor.apply(self.state_data1)
+                # Apply additional morphological operations to clean the mask (optional)
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+                fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
+                contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                # Iterate through contours and filter based on size (area)
+                filtered_cnts = [contour for contour in contours if cv2.contourArea(contour) > 300]
+                if cv2.countNonZero(self.state_data1)>8 or filtered_cnts:
                     self.frame_counter = 0
                 else:
                     self.frame_counter +=1 
                     print(self.frame_counter)
-                    self.pink_cooldown = True
-                # fg_mask = self.bg_subtractor.apply(self.state_data1)
-                # # Apply additional morphological operations to clean the mask (optional)
-                # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-                # fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
-                # contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                # # Iterate through contours and filter based on size (area)
-                # filtered_cnts = [contour for contour in contours if cv2.contourArea(contour) > 500]
-                # if filtered_cnts 
             else:
                 if (cv2.countNonZero(self.state_data1) > 1000):
                     self.frame_counter = 0
@@ -305,7 +307,7 @@ class StateMachine:
                 if not self.yoda_wait:
                     self.current_state = "YODA_DRIVE"
                     rospy.Timer(rospy.Duration(5), self.reset_pink_cooldown, oneshot=True)
-                    rospy.Timer(rospy.Duration(2), self.set_yoda_wait, oneshot=True)
+                    rospy.Timer(rospy.Duration(4.5), self.set_yoda_wait, oneshot=True)
                 else:
                     self.current_state = "YODA_DRIVE"
                     self.yoda_wait = 0
@@ -317,8 +319,12 @@ class StateMachine:
         # if not self.aligned:
         #     self.align()
         # else:
-        z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain,2.5)
-        pub_cmd_vel(.5,z)
+        if self.mountain_boost:
+            z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain,2.8)
+            pub_cmd_vel(.7,z)
+        else:
+            z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain,2.7)
+            pub_cmd_vel(.5,z) # mountain not sped up works consistently 
 
     def pedestrian_state(self):
         fg_mask = self.bg_subtractor.apply(self.state_data1)
@@ -327,13 +333,13 @@ class StateMachine:
         fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
         contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # Iterate through contours and filter based on size (area)
-        filtered_cnts = [contour for contour in contours if cv2.contourArea(contour) > 40]
+        filtered_cnts = [contour for contour in contours if cv2.contourArea(contour) > 30]
         if filtered_cnts:
             self.frame_counter = 0
         else:
             self.frame_counter +=1 
             print(self.frame_counter)
-        if self.frame_counter > 7:
+        if self.frame_counter > 10:
             self.frame_counter = 0
             holder = self.current_state
             self.current_state = "ROAD"
@@ -393,38 +399,38 @@ class StateMachine:
                 # Publish most recent value regardless (if any)
         
         # Save clues with correct names to files
-        #if not os.path.exists(output_path):
-        #    os.makedirs(output_path)
+        if not os.path.exists(output_path):
+           os.makedirs(output_path)
 
-        # with open(csv_file_path, 'r', newline='') as file:
-        #     reader = csv.reader(file)
-        #     rows = list(reader)
-        #     #print(rows.shape)
+        with open(csv_file_path, 'r', newline='') as file:
+            reader = csv.reader(file)
+            rows = list(reader)
+            #print(rows.shape)
             
-        #     for i, clue_set in enumerate(self.clues):
+            for i, clue_set in enumerate(self.clues):
                 
-        #         row = []
-        #         if 0 <= i <= len(rows):
-        #             row = rows[i]
-        #         else:
-        #             print(f"Row number {i} is out of range.")
+                row = []
+                if 0 <= i <= len(rows):
+                    row = rows[i]
+                else:
+                    print(f"Row number {i} is out of range.")
                 
-        #         print(row)
-        #         #pattern = r'([^,]+),(.+)'
-        #         #match = re.match(pattern, row)
+                print(row)
+                #pattern = r'([^,]+),(.+)'
+                #match = re.match(pattern, row)
 
-        #         key = row[0]
-        #         value = row[1]
+                key = row[0]
+                value = row[1]
 
-        #         for j, clue in enumerate(clue_set):
+                for j, clue in enumerate(clue_set):
 
-        #             filename = f'plate{j}_{key}_{value}.png'
-        #             filename = filename.replace(' ', '_')
-        #             file_output = output_path + filename
-        #             # Write the image using the specified filename
-        #             print(f"DOWNLOADING FILE: {filename}")
-        #             #cv2.imshow(clue)
-        #             cv2.imwrite(filename, clue)
+                    filename = f'plate{j}_{key}_{value}.png'
+                    filename = filename.replace(' ', '_')
+                    file_output = output_path + filename
+                    # Write the image using the specified filename
+                    print(f"DOWNLOADING FILE: {filename}")
+                    #cv2.imshow(clue)
+                    cv2.imwrite(filename, clue)
 
 
     def event_occurred(self, event, data):
@@ -432,7 +438,7 @@ class StateMachine:
         if event == "PINK" and not self.pink_cooldown:
             print(event)
             self.pink_cooldown = True
-            rospy.Timer(rospy.Duration(6), self.reset_pink_cooldown, oneshot=True)
+            rospy.Timer(rospy.Duration(2), self.reset_pink_cooldown, oneshot=True)
             holder = self.current_state
             if holder == "ROAD": 
                 self.current_state = "GRASS"
@@ -448,6 +454,7 @@ class StateMachine:
                 self.current_state = "MOUNTAIN"
                 self.aligned = False
                 self.mountain_state()
+                rospy.Timer(rospy.Duration(4), self.mountain_boost_on, oneshot=True)
             print(f'{holder} -------> {self.current_state}')
         
         if event == "RED" and not self.ped_xing:
@@ -469,6 +476,8 @@ class StateMachine:
             print(f'{holder} -------> {self.current_state}')
 
         if event == "CLUE":
+            if self.clue_count == 4:
+                self.bridge_boost = False
             if not self.clue_cooldown:
                 self.clue_cooldown = True
                 rospy.Timer(rospy.Duration(1), self.update_clue_count, oneshot=True)
@@ -491,6 +500,8 @@ class StateMachine:
         #     if holder == "ROAD": 
         #         self.current_state = "VEHICLE"
         #     print(f'{holder} -------> {self.current_state}')
+        if self.clue_count == 4:
+            rospy.Timer(rospy.Duration(1.2), self.bridge_boost_on, oneshot=True)
         if self.clue_count == 7:
             #pub_cmd_vel(0,0)
             holder = self.current_state
@@ -509,6 +520,15 @@ class StateMachine:
     def set_yoda_wait(self, event):
         self.yoda_wait = True
         print("YODA 1 passed")
+    
+    def bridge_boost_on(self, event):
+        print("bridge boost")
+        self.bridge_boost = True
+
+
+    def mountain_boost_on(self, event):
+        print("mountain boost")
+        self.mountain_boost = True
 
     def align(self):
         contours, _ = cv2.findContours(self.state_data2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -529,19 +549,19 @@ class StateMachine:
             thresh1 = -.3
             thresh2 = -.6
         if angle > thresh1:
-            pub_cmd_vel(0,-.3)
+            pub_cmd_vel(-.07,-.5)
             print("RIGHT")
             self.frame_counter+=1
         elif angle < thresh2:
-            pub_cmd_vel(0,.3)
+            pub_cmd_vel(-.07,.5)
             print("LEFT")
             self.frame_counter+=1
         else:
-            print("ALIGNED")
-            pub_cmd_vel(0,0)
             if self.frame_counter > 2:
+                print("ALIGNED")
                 self.aligned = True
                 self.frame_counter=0
+            self.frame_counter+=1
         
             
 
@@ -608,7 +628,7 @@ def camera_callback(data):
     cnts, _ = cv2.findContours(mask_clue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     filtered_cnts = [contour for contour in cnts if cv2.contourArea(contour) > 1000]
     
-    if cv2.countNonZero(mask_clue) > 13000 and filtered_cnts:
+    if cv2.countNonZero(mask_clue) > 10000 and filtered_cnts:
             print(cv2.countNonZero(mask_clue))
             approx = []
             for c in filtered_cnts:
