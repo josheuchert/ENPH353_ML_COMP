@@ -19,7 +19,7 @@ import re
 
 # Compute the file path from home
 csv_file_path = '/home/fizzer/ros_ws/src/2023_competition/enph353/enph353_gazebo/scripts/plates.csv'
-output_path = '/home/fizzer/real_plates/run31/'
+output_path = '/home/fizzer/real_plates/run32/'
 
 
 
@@ -57,7 +57,7 @@ input_details_yoda = interpreter_yoda.get_input_details()[0]
 output_details_yoda = interpreter_yoda.get_output_details()[0]
 print("Loaded Yoda")
 
-interpreter_clues = tf.lite.Interpreter(model_path='quantized_model_clues3.tflite')
+interpreter_clues = tf.lite.Interpreter(model_path='quantized_clue4.tflite')
 interpreter_clues.allocate_tensors()
 input_details_clues = interpreter_clues.get_input_details()[0]
 output_details_clues = interpreter_clues.get_output_details()[0]
