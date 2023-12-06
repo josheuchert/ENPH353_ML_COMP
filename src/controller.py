@@ -37,7 +37,7 @@ input_details_road = interpreter_road.get_input_details()[0]
 output_details_road = interpreter_road.get_output_details()[0]
 print("Loaded Road")
 
-interpreter_grass = tf.lite.Interpreter(model_path='quantized_model_grass8.tflite')
+interpreter_grass = tf.lite.Interpreter(model_path='quantized_model_grass9.tflite')
 interpreter_grass.allocate_tensors()
 input_details_grass = interpreter_grass.get_input_details()[0]
 output_details_grass = interpreter_grass.get_output_details()[0]
@@ -61,10 +61,10 @@ input_details_clues = interpreter_clues.get_input_details()[0]
 output_details_clues = interpreter_clues.get_output_details()[0]
 print("Loaded Clue Interpreter")
 
-path = os.path.join(output_path)
-print(path)
+#path = os.path.join(output_path)
+#print(path)
 # os.mkdir(path, mode = 0o777)
-os.chdir(path)
+#os.chdir(path)
 
 def run_model(img, interpreter, input_details, output_details, steer):
     img_aug = img.reshape((1, 90, 160, 1)).astype(input_details["dtype"])
@@ -153,8 +153,9 @@ def clue_detect(clue_board):
             interpreter_clues.set_tensor(input_details_clues["index"], input_letter)
             interpreter_clues.invoke()
             output = interpreter_clues.get_tensor(output_details_clues["index"])
-
             pred_letter = convert_from_one_hot(output)[0]
+            if pred_letter == 'Q' or pred_letter == 'O':
+                print(output)
             key_array.append(pred_letter)
 
     key = ''.join(key_array)
@@ -270,7 +271,8 @@ class StateMachine:
         #     pub_cmd_vel(1,z)
         # else:
         z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,4) #4
-        pub_cmd_vel(.7,z)
+        print(z)
+        pub_cmd_vel(.65,z)
 
     def yoda_drive_state(self):
         z = run_model(self.drive_input,interpreter_yoda,input_details_yoda,output_details_yoda,3)
@@ -301,19 +303,19 @@ class StateMachine:
                     self.frame_counter +=1 
                     print(self.frame_counter)
             else:
-                if (cv2.countNonZero(self.state_data1) > 1000):
+                self.pink_cooldown = True
+                if (cv2.countNonZero(self.state_data1) > 900):
                     self.frame_counter = 0
                 else:
                     self.frame_counter +=1 
                     print(self.frame_counter)
-                    self.pink_cooldown = True
-            if self.frame_counter > 7:
+            if self.frame_counter > 11:
                 self.frame_counter = 0
                 holder = self.current_state
                 if not self.yoda_wait:
                     self.current_state = "YODA_DRIVE"
                     rospy.Timer(rospy.Duration(5), self.reset_pink_cooldown, oneshot=True)
-                    rospy.Timer(rospy.Duration(4.5), self.set_yoda_wait, oneshot=True)
+                    rospy.Timer(rospy.Duration(4.35), self.set_yoda_wait, oneshot=True)
                 else:
                     self.current_state = "YODA_DRIVE"
                     self.yoda_wait = 0
