@@ -19,7 +19,7 @@ import re
 
 # Compute the file path from home
 csv_file_path = '/home/fizzer/ros_ws/src/2023_competition/enph353/enph353_gazebo/scripts/plates.csv'
-output_path = '/home/fizzer/real_plates/run13/'
+output_path = '/home/fizzer/real_plates/run27/'
 
 
 
@@ -34,14 +34,12 @@ output_path = '/home/fizzer/real_plates/run13/'
 
 
 interpreter_road = tf.lite.Interpreter(model_path='quantized_model_road3.tflite')
-interpreter_road = tf.lite.Interpreter(model_path='quantized_model_road3.tflite')
 interpreter_road.allocate_tensors()
 input_details_road = interpreter_road.get_input_details()[0]
 output_details_road = interpreter_road.get_output_details()[0]
 print("Loaded Road")
 
 interpreter_grass = tf.lite.Interpreter(model_path='quantized_model_grass8.tflite')
-interpreter_grass = tf.lite.Interpreter(model_path='quantized_model_grass7.tflite')
 interpreter_grass.allocate_tensors()
 input_details_grass = interpreter_grass.get_input_details()[0]
 output_details_grass = interpreter_grass.get_output_details()[0]
@@ -260,8 +258,8 @@ class StateMachine:
         pub_cmd_vel(.7,z)
 
     def grass_state(self):
-        z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,2.9)
-        pub_cmd_vel(.7,z)
+        z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,2.5)
+        pub_cmd_vel(.55,z)
 
     def yoda_drive_state(self):
         z = run_model(self.drive_input,interpreter_yoda,input_details_yoda,output_details_yoda,3)
@@ -296,7 +294,7 @@ class StateMachine:
                 self.frame_counter +=1 
                 print(self.frame_counter)
                 self.pink_cooldown = True
-            if self.frame_counter > 10:
+            if self.frame_counter > 7:
                 self.frame_counter = 0
                 holder = self.current_state
                 if not self.yoda_wait:
@@ -333,7 +331,7 @@ class StateMachine:
         else:
             self.frame_counter +=1 
             print(self.frame_counter)
-        if self.frame_counter > 13:
+        if self.frame_counter > 7:
             self.frame_counter = 0
             holder = self.current_state
             self.current_state = "ROAD"
@@ -388,6 +386,7 @@ class StateMachine:
                 pub_clue(id,password,possible_keys[submit_key],submit_value)
             else:
                 print("No good values found")
+                # Publish most recent value regardless (if any)
         
         # Save clues with correct names to files
         #if not os.path.exists(output_path):
@@ -472,9 +471,7 @@ class StateMachine:
                 rospy.Timer(rospy.Duration(2), self.update_clue_count, oneshot=True)
             self.cur_clue.append(data)
             print("CLUE ADDED")
-            if self.clue_count == 5:
-                self.publish_clues()
-                print("GAME OVER")
+
             
             
             
@@ -535,6 +532,7 @@ class StateMachine:
             self.frame_counter+=1
         else:
             print("ALIGNED")
+            pub_cmd_vel(0,0)
             if self.frame_counter > 2:
                 self.aligned = True
                 self.frame_counter=0
@@ -680,7 +678,7 @@ def camera_callback(data):
                 state_machine.event_occurred("CLUE",result)
                 #print("Update result")
 
-    if cv2.countNonZero(mask_pink) > 25000:
+    if cv2.countNonZero(mask_pink) > 20000:
             state_machine.event_occurred("PINK",None)
 
     if cv2.countNonZero(mask_red) > 30000:
