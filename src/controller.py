@@ -63,10 +63,10 @@ input_details_clues = interpreter_clues.get_input_details()[0]
 output_details_clues = interpreter_clues.get_output_details()[0]
 print("Loaded Clue Interpreter")
 
-path = os.path.join(output_path)
-print(path)
-os.mkdir(path, mode = 0o777)
-os.chdir(path)
+# path = os.path.join(output_path)
+# print(path)
+# os.mkdir(path, mode = 0o777)
+# os.chdir(path)
 
 def run_model(img, interpreter, input_details, output_details, steer):
     img_aug = img.reshape((1, 90, 160, 1)).astype(input_details["dtype"])
@@ -278,25 +278,27 @@ class StateMachine:
             self.align()
         else:
             if self.yoda_wait:
-                fg_mask = self.bg_subtractor.apply(self.state_data1)
-                # Apply additional morphological operations to clean the mask (optional)
-                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-                fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
-                contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                # Iterate through contours and filter based on size (area)
-                filtered_cnts = [contour for contour in contours if cv2.contourArea(contour) > 500]
-                for cnts in filtered_cnts:
-                    # Draw bounding rectangle or perform further processing on the detected object
-                    x, y, w, h = cv2.boundingRect(cnts)
-                    cv2.rectangle(self.cv_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            #cv2.imshow("states", self.cv_image)
-            #cv2.waitKey(1)
-            if (cv2.countNonZero(self.state_data1) > 1000 and not self.yoda_wait) or (filtered_cnts and self.yoda_wait):
-                self.frame_counter = 0
+                if cv2.countNonZero(self.state_data1)>1:
+                    self.frame_counter = 0
+                else:
+                    self.frame_counter +=1 
+                    print(self.frame_counter)
+                    self.pink_cooldown = True
+                # fg_mask = self.bg_subtractor.apply(self.state_data1)
+                # # Apply additional morphological operations to clean the mask (optional)
+                # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+                # fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
+                # contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                # # Iterate through contours and filter based on size (area)
+                # filtered_cnts = [contour for contour in contours if cv2.contourArea(contour) > 500]
+                # if filtered_cnts 
             else:
-                self.frame_counter +=1 
-                print(self.frame_counter)
-                self.pink_cooldown = True
+                if (cv2.countNonZero(self.state_data1) > 1000):
+                    self.frame_counter = 0
+                else:
+                    self.frame_counter +=1 
+                    print(self.frame_counter)
+                    self.pink_cooldown = True
             if self.frame_counter > 7:
                 self.frame_counter = 0
                 holder = self.current_state
@@ -326,10 +328,6 @@ class StateMachine:
         contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # Iterate through contours and filter based on size (area)
         filtered_cnts = [contour for contour in contours if cv2.contourArea(contour) > 40]
-        for cnts in filtered_cnts:
-            # Draw bounding rectangle or perform further processing on the detected object
-            x, y, w, h = cv2.boundingRect(cnts)
-            cv2.rectangle(self.cv_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
         if filtered_cnts:
             self.frame_counter = 0
         else:
@@ -349,17 +347,19 @@ class StateMachine:
         fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
         contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # Iterate through contours and filter based on size (area)
-        print(cv2.contourArea(contours))
-        filtered_cnts = [contour for contour in contours if cv2.contourArea(contour) > 1000]
-        for cnts in filtered_cnts:
-            # Draw bounding rectangle or perform further processing on the detected object
-            x, y, w, h = cv2.boundingRect(cnts)
-            cv2.rectangle(self.cv_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        filtered_cnts = [contour for contour in contours if cv2.contourArea(contour) > 100 ]
         if filtered_cnts:
-            self.frame_counter = 0
-        else:
-            self.frame_counter +=1 
-            print(self.frame_counter)
+            big_contour = max(filtered_cnts, key=cv2.contourArea)
+            M = cv2.moments(big_contour)
+            cx = int(M["m10"] / M["m00"])
+            cy = int(M["m01"] / M["m00"])
+            #print(f'x:{cx} y:{cy}')
+            if (cx<600):
+                self.frame_counter = 0
+                print("STOP")
+            else: 
+                self.frame_counter +=1 
+                print("GOO")
         if self.frame_counter > 10:
             self.frame_counter = 0
             holder = self.current_state
@@ -396,35 +396,35 @@ class StateMachine:
         #if not os.path.exists(output_path):
         #    os.makedirs(output_path)
 
-        with open(csv_file_path, 'r', newline='') as file:
-            reader = csv.reader(file)
-            rows = list(reader)
-            #print(rows.shape)
+        # with open(csv_file_path, 'r', newline='') as file:
+        #     reader = csv.reader(file)
+        #     rows = list(reader)
+        #     #print(rows.shape)
             
-            for i, clue_set in enumerate(self.clues):
+        #     for i, clue_set in enumerate(self.clues):
                 
-                row = []
-                if 0 <= i <= len(rows):
-                    row = rows[i]
-                else:
-                    print(f"Row number {i} is out of range.")
+        #         row = []
+        #         if 0 <= i <= len(rows):
+        #             row = rows[i]
+        #         else:
+        #             print(f"Row number {i} is out of range.")
                 
-                print(row)
-                #pattern = r'([^,]+),(.+)'
-                #match = re.match(pattern, row)
+        #         print(row)
+        #         #pattern = r'([^,]+),(.+)'
+        #         #match = re.match(pattern, row)
 
-                key = row[0]
-                value = row[1]
+        #         key = row[0]
+        #         value = row[1]
 
-                for j, clue in enumerate(clue_set):
+        #         for j, clue in enumerate(clue_set):
 
-                    filename = f'plate{j}_{key}_{value}.png'
-                    filename = filename.replace(' ', '_')
-                    file_output = output_path + filename
-                    # Write the image using the specified filename
-                    print(f"DOWNLOADING FILE: {filename}")
-                    #cv2.imshow(clue)
-                    cv2.imwrite(filename, clue)
+        #             filename = f'plate{j}_{key}_{value}.png'
+        #             filename = filename.replace(' ', '_')
+        #             file_output = output_path + filename
+        #             # Write the image using the specified filename
+        #             print(f"DOWNLOADING FILE: {filename}")
+        #             #cv2.imshow(clue)
+        #             cv2.imwrite(filename, clue)
 
 
     def event_occurred(self, event, data):
@@ -467,18 +467,13 @@ class StateMachine:
                 self.current_state = "YODA_WAIT"
                 
             print(f'{holder} -------> {self.current_state}')
-            
 
         if event == "CLUE":
             if not self.clue_cooldown:
                 self.clue_cooldown = True
-                rospy.Timer(rospy.Duration(2), self.update_clue_count, oneshot=True)
+                rospy.Timer(rospy.Duration(1), self.update_clue_count, oneshot=True)
             self.cur_clue.append(data)
             print("CLUE ADDED")
-
-            
-            
-            
             
     
     def reset_pink_cooldown(self, event):
@@ -489,6 +484,13 @@ class StateMachine:
         self.clues.append(self.cur_clue)
         print(len(self.cur_clue))
         self.cur_clue = []
+        #Code for vehicle detection if necessary
+        # if self.clue_count == 2:
+        #     pub_cmd_vel(0,0)
+        #     holder = self.current_state
+        #     if holder == "ROAD": 
+        #         self.current_state = "VEHICLE"
+        #     print(f'{holder} -------> {self.current_state}')
         if self.clue_count == 7:
             #pub_cmd_vel(0,0)
             holder = self.current_state
