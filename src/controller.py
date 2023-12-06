@@ -19,7 +19,7 @@ import re
 
 # Compute the file path from home
 csv_file_path = '/home/fizzer/ros_ws/src/2023_competition/enph353/enph353_gazebo/scripts/plates.csv'
-output_path = '/home/fizzer/real_plates/run27/'
+output_path = '/home/fizzer/real_plates/run31/'
 
 
 
@@ -51,7 +51,7 @@ input_details_mountain = interpreter_mountain.get_input_details()[0]
 output_details_mountain = interpreter_mountain.get_output_details()[0]
 print("Loaded Mountain")
 
-interpreter_yoda = tf.lite.Interpreter(model_path='quantized_model_yoda3.tflite')
+interpreter_yoda = tf.lite.Interpreter(model_path='quantized_model_yoda5.tflite')
 interpreter_yoda.allocate_tensors()
 input_details_yoda = interpreter_yoda.get_input_details()[0]
 output_details_yoda = interpreter_yoda.get_output_details()[0]
@@ -243,6 +243,7 @@ class StateMachine:
         self.cv_image = None
         self.yoda_wait = False
         self.aligned = False
+        self.tunnel = False
         self.frame_counter = 0 
         self.clue_count = 0
         self.clue_cooldown = False
@@ -264,7 +265,9 @@ class StateMachine:
     def yoda_drive_state(self):
         z = run_model(self.drive_input,interpreter_yoda,input_details_yoda,output_details_yoda,3)
         if self.yoda_wait:
-            pub_cmd_vel(.8,z)
+            pub_cmd_vel(1,z)
+        elif self.tunnel:
+            pub_cmd_vel(.5,z)
         else:
             pub_cmd_vel(1,z)
 
@@ -299,20 +302,21 @@ class StateMachine:
                 holder = self.current_state
                 if not self.yoda_wait:
                     self.current_state = "YODA_DRIVE"
-                    rospy.Timer(rospy.Duration(7), self.reset_pink_cooldown, oneshot=True)
-                    rospy.Timer(rospy.Duration(5), self.set_yoda_wait, oneshot=True)
+                    rospy.Timer(rospy.Duration(5), self.reset_pink_cooldown, oneshot=True)
+                    rospy.Timer(rospy.Duration(2), self.set_yoda_wait, oneshot=True)
                 else:
                     self.current_state = "YODA_DRIVE"
                     self.yoda_wait = 0
+                    self.tunnel = True
                 print(f'{holder} -------> {self.current_state}')
         
     
     def mountain_state(self):
-        if not self.aligned:
-            self.align()
-        else:
-            z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain,2.5)
-            pub_cmd_vel(.5,z)
+        # if not self.aligned:
+        #     self.align()
+        # else:
+        z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain,2.5)
+        pub_cmd_vel(.5,z)
 
     def pedestrian_state(self):
         fg_mask = self.bg_subtractor.apply(self.state_data1)
