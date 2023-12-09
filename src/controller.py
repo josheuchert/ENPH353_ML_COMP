@@ -608,6 +608,7 @@ password = "password"
 state_machine = StateMachine()
 
 
+
 def camera_callback(data):
     lower_pink= np.array([140,80,105])
     upper_pink= np.array([153,255,255])
