@@ -12,25 +12,16 @@ import tensorflow as tf
 
 from collections import Counter
 
-# data collection
+# imports for data collection
 import os
 import csv
 import re
 
-# Compute the file path from home
+# Compute the file path from home -> for data collection
 csv_file_path = '/home/fizzer/ros_ws/src/2023_competition/enph353/enph353_gazebo/scripts/plates.csv'
 output_path = '/home/fizzer/new_plates/'
 
-# import keras
-# from keras.models import load_model
-# drive_model = load_model('test6.h5',compile=False)
-# drive_model.compile(
-#                    optimizer='adam',
-#                    loss=keras.losses.MeanSquaredError()
-#                   )
-# drive_model.summary()
-
-
+# Load the trained neural networks
 interpreter_road = tf.lite.Interpreter(model_path='quantized_model_road3.tflite')
 interpreter_road.allocate_tensors()
 input_details_road = interpreter_road.get_input_details()[0]
@@ -66,6 +57,7 @@ print("Loaded Clue Interpreter")
 # os.mkdir(path, mode = 0o777)
 #os.chdir(path)
 
+# Run the model on the input image
 def run_model(img, interpreter, input_details, output_details, steer):
     img_aug = img.reshape((1, 90, 160, 1)).astype(input_details["dtype"])
     interpreter.set_tensor(input_details_road["index"], img_aug)
@@ -75,13 +67,14 @@ def run_model(img, interpreter, input_details, output_details, steer):
     output = denormalize_value(output, -steer, steer)
     return output
 
-
+# Denormalize a value from the range [-1, 1] to [min_val, max_val]
 def denormalize_value(normalized_value, min_val, max_val):
     return (normalized_value * (max_val - min_val)) + min_val
 
 # Clue Detect Functions
 possible_keys = {"SIZE  " : 1, "VICTIM" : 2, "CRIME " : 3, "TIME  " : 4, "PLACE " : 5, "MOTIVE" : 6, "WEAPON" : 7, "BANDIT" : 8}
 
+# Check if the letter is a space
 def check_if_space(letter):
     # Count non-white pixels
     non_white_pixels = np.sum(letter < 255)
@@ -112,6 +105,7 @@ def convert_from_one_hot(one_hot_labels):
 
     return decoded_labels
 
+# Detect the key and value of a clue
 def clue_detect(clue_board):
 
     # detect the key
@@ -191,12 +185,7 @@ def clue_detect(clue_board):
         if (check_if_space(letter)):
             value_array.append(' ')
         else:
-            # regular version
-
-            #input_letter = np.expand_dims(letter, axis=-1)
-            #input_letter = np.expand_dims(input_letter, axis=0)
-            #pred_letter = conSIZE,V COUNTLESSert_from_one_hot(conv_model.predict(input_letter))
-
+            
             # quantized version
 
             input_letter = np.expand_dims(letter, axis=0)
@@ -228,11 +217,12 @@ def clue_detect(clue_board):
 # clue location: int (-1 to 8); -1 and 0 are special cases - see below
 # clue prediction: n characters (no spaces, all capitals)
 
-#publiser helper function
+# publiser helper function
 def pub_clue(id,password,location,prediciton):
     formatted_string = f"{id},{password},{location},{prediciton}"
     score_pub.publish(formatted_string)
 
+# publisher velocity helper function
 def pub_cmd_vel(x,z):
     move = Twist()
     move.angular.z = z
@@ -240,6 +230,7 @@ def pub_cmd_vel(x,z):
     move.linear.x = x
     move_pub.publish(move)
 
+# State Machine Class
 class StateMachine:
     def __init__(self):
         self.current_state = "ROAD"
@@ -266,6 +257,9 @@ class StateMachine:
         # Clue Detect Variables
         self.good_values = []
 
+    # State Functions
+        
+    # Road State
     def road_state(self):
         if not self.started:
             pub_clue(id,password,0,"NA")
@@ -275,6 +269,7 @@ class StateMachine:
             z = run_model(self.drive_input,interpreter_road,input_details_road,output_details_road,2.8)#2.8
             pub_cmd_vel(.7,z)
 
+    # Grass State
     def grass_state(self):
         # if self.bridge_boost:
         #     z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,3)
@@ -284,6 +279,7 @@ class StateMachine:
         print(z)
         pub_cmd_vel(.65,z)
 
+    # Yoda Drive State
     def yoda_drive_state(self):
         z = run_model(self.drive_input,interpreter_yoda,input_details_yoda,output_details_yoda,3)
         if self.yoda_wait:
@@ -293,6 +289,7 @@ class StateMachine:
         else:
             pub_cmd_vel(1,z)
 
+    # Yoda Wait State
     def yoda_wait_state(self):
         pub_cmd_vel(0,0)
         filtered_cnts=[]
@@ -300,6 +297,7 @@ class StateMachine:
             self.align()
         else:
             if self.yoda_wait:
+                # Check if yoda is in the frame
                 fg_mask = self.bg_subtractor.apply(self.state_data1)
                 # Apply additional morphological operations to clean the mask (optional)
                 kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
@@ -333,6 +331,7 @@ class StateMachine:
                 print(f'{holder} -------> {self.current_state}')
         
     
+    # Mountain State
     def mountain_state(self):
         # if not self.aligned:
         #     self.align()
@@ -344,7 +343,9 @@ class StateMachine:
             z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain,2.7)
             pub_cmd_vel(.5,z) # mountain not sped up works consistently 
 
+    # Pedestrian State
     def pedestrian_state(self):
+        # Check if pedestrian is in the frame
         fg_mask = self.bg_subtractor.apply(self.state_data1)
         # Apply additional morphological operations to clean the mask (optional)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
@@ -364,8 +365,9 @@ class StateMachine:
             pub_cmd_vel(.1,0)
             print(f'{holder} -------> {self.current_state}')
              
-
+    # Vehicle State
     def vehicle_state(self):
+        # Check if vehicle is in the frame
         fg_mask = self.bg_subtractor.apply(self.state_data1)
         # Apply additional morphological operations to clean the mask (optional)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
@@ -391,6 +393,7 @@ class StateMachine:
             self.current_state = "ROAD"
             print(f'{holder} -------> {self.current_state}')
 
+    # Publish Clues
     def publish_clues(self):
         print("Publishing Clues")
         for i, clue_set in enumerate(self.clues):
@@ -457,11 +460,13 @@ class StateMachine:
         #             #cv2.imshow(clue)
         #             cv2.imwrite(filename, clue)
 
+    # End Run
     def end_run(self, event):
         print("ENDING RUN")
         self.publish_clues()
         pub_clue(id,password,-1,"NA")
 
+    # Event Functions
     def event_occurred(self, event, data):
         # Callback function to handle the event
         if event == "PINK" and not self.pink_cooldown:
@@ -513,10 +518,11 @@ class StateMachine:
             self.cur_clue.append(data)
             print("CLUE ADDED")
             
-    
+    # Timer Functions
     def reset_pink_cooldown(self, event):
         self.pink_cooldown = False
 
+    # Moves to the next clueboard
     def update_clue_count(self, event):
         self.clue_cooldown = False
         self.clues.append(self.cur_clue)
@@ -545,20 +551,21 @@ class StateMachine:
         # self.publish_clues()
 
         
-
+    # Yoda Wait Function
     def set_yoda_wait(self, event):
         self.yoda_wait = True
         print("YODA 1 passed")
     
+    # Boost Functions
     def bridge_boost_on(self, event):
         print("bridge boost")
         self.bridge_boost = True
-
 
     def mountain_boost_on(self, event):
         print("mountain boost")
         self.mountain_boost = True
 
+    # Align Function
     def align(self):
         contours, _ = cv2.findContours(self.state_data2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         largest_contour = max(contours, key=cv2.contourArea)
@@ -608,7 +615,7 @@ password = "password"
 state_machine = StateMachine()
 
 
-
+# Callback function to handle the image
 def camera_callback(data):
     lower_pink= np.array([140,80,105])
     upper_pink= np.array([153,255,255])
@@ -651,6 +658,7 @@ def camera_callback(data):
     mask_yoda1 = cv2.inRange(hsv, lower_yoda1, upper_yoda1)
     mask_yoda2 = cv2.inRange(cv_image, lower_yoda2, upper_yoda2)
 
+    # Clue Detection
     cnts, _ = cv2.findContours(mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cv2.fillPoly(mask_blue, cnts, (255,255,255))
     filtered_cnts = [contour for contour in cnts if cv2.contourArea(contour) > 1000]
@@ -676,6 +684,7 @@ def camera_callback(data):
                 # approx
             if len(approx) == 4:
                 
+                # Sort Corners
                 centroid = np.mean(approx, axis=0)[0]
 
                 #get x cord of centroid 
@@ -774,7 +783,7 @@ def camera_callback(data):
             
     #pub_clue(id,password,-1,"NA")
 
-
+# Subscribe to ROS topics
 def subscribe():
     rospy.Subscriber('/R1/pi_camera/image_raw',Image,camera_callback)
     rospy.Subscriber('/clock',Clock)
