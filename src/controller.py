@@ -1,4 +1,8 @@
 #! /usr/bin/env python3
+
+## @package controller
+#  This script is used to control the robot in the ROS environment.
+
 import rospy
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
@@ -17,35 +21,50 @@ import os
 import csv
 import re
 
-# Compute the file path from home -> for data collection
+## @var csv_file_path
+#  The path to the CSV file for data collection.
 csv_file_path = '/home/fizzer/ros_ws/src/2023_competition/enph353/enph353_gazebo/scripts/plates.csv'
+
+## @var output_path
+#  The path where new plates will be stored.
 output_path = '/home/fizzer/new_plates/'
 
 # Load the trained neural networks
+
+## @var interpreter_road
+#  The TensorFlow Lite interpreter for the road model.
 interpreter_road = tf.lite.Interpreter(model_path='quantized_model_road3.tflite')
 interpreter_road.allocate_tensors()
 input_details_road = interpreter_road.get_input_details()[0]
 output_details_road = interpreter_road.get_output_details()[0]
 print("Loaded Road")
 
+## @var interpreter_grass
+#  The TensorFlow Lite interpreter for the grass model.
 interpreter_grass = tf.lite.Interpreter(model_path='quantized_model_grass9.tflite')
 interpreter_grass.allocate_tensors()
 input_details_grass = interpreter_grass.get_input_details()[0]
 output_details_grass = interpreter_grass.get_output_details()[0]
 print("Loaded Grass")
 
+## @var interpreter_mountain
+#  The TensorFlow Lite interpreter for the mountain model.
 interpreter_mountain = tf.lite.Interpreter(model_path='quantized_model_mountain7.tflite')
 interpreter_mountain.allocate_tensors()
 input_details_mountain = interpreter_mountain.get_input_details()[0]
 output_details_mountain = interpreter_mountain.get_output_details()[0]
 print("Loaded Mountain")
 
+## @var interpreter_yoda
+#  The TensorFlow Lite interpreter for the Yoda model.
 interpreter_yoda = tf.lite.Interpreter(model_path='quantized_model_yoda5.tflite')
 interpreter_yoda.allocate_tensors()
 input_details_yoda = interpreter_yoda.get_input_details()[0]
 output_details_yoda = interpreter_yoda.get_output_details()[0]
 print("Loaded Yoda")
 
+## @var interpreter_clues
+#  The TensorFlow Lite interpreter for the clues model.
 interpreter_clues = tf.lite.Interpreter(model_path='quantized_model_clues3.tflite')
 interpreter_clues.allocate_tensors()
 input_details_clues = interpreter_clues.get_input_details()[0]
@@ -57,7 +76,14 @@ print("Loaded Clue Interpreter")
 # os.mkdir(path, mode = 0o777)
 #os.chdir(path)
 
-# Run the model on the input image
+## @fn run_model
+#  @brief This function runs the model on the input image.
+#  @param img The input image.
+#  @param interpreter The TensorFlow Lite interpreter.
+#  @param input_details The input details of the interpreter.
+#  @param output_details The output details of the interpreter.
+#  @param steer The steering value.
+#  @return The output of the model.
 def run_model(img, interpreter, input_details, output_details, steer):
     img_aug = img.reshape((1, 90, 160, 1)).astype(input_details["dtype"])
     interpreter.set_tensor(input_details_road["index"], img_aug)
@@ -67,14 +93,28 @@ def run_model(img, interpreter, input_details, output_details, steer):
     output = denormalize_value(output, -steer, steer)
     return output
 
-# Denormalize a value from the range [-1, 1] to [min_val, max_val]
+## @fn denormalize_value
+#  @brief This function denormalizes a value from the range [-1, 1] to [min_val, max_val].
+#  @param val The value to denormalize.
+#  @param min_val The minimum value of the new range.
+#  @param max_val The maximum value of the new range.
+#  @return The denormalized value.
 def denormalize_value(normalized_value, min_val, max_val):
     return (normalized_value * (max_val - min_val)) + min_val
 
-# Clue Detect Functions
+# Denormalize a value from the range [-1, 1] to [min_val, max_val]
+## @fn denormalize_value
+#  @brief This function denormalizes a value from the range [-1, 1] to [min_val, max_val].
+#  @param val The value to denormalize.
+#  @param min_val The minimum value of the new range.
+#  @param max_val The maximum value of the new range.
+#  @return The denormalized value.
 possible_keys = {"SIZE  " : 1, "VICTIM" : 2, "CRIME " : 3, "TIME  " : 4, "PLACE " : 5, "MOTIVE" : 6, "WEAPON" : 7, "BANDIT" : 8}
 
-# Check if the letter is a space
+## @fn check_if_space
+#  @brief This function checks if a given letter is a space.
+#  @param letter The letter to check.
+#  @return True if the letter is a space, False otherwise.
 def check_if_space(letter):
     # Count non-white pixels
     non_white_pixels = np.sum(letter < 255)
@@ -88,13 +128,19 @@ def check_if_space(letter):
     else:
         return False
 
-# Go from char to one hot
+## @fn convert_to_one_hot
+#  @brief This function converts a given label to one-hot encoding.
+#  @param Y The label to convert.
+#  @return The one-hot encoded label.
 def convert_to_one_hot(Y):
     Y = np.array([ord(char) - ord('A') if char.isalpha() else (int(char)+26) for char in Y])
     Y = np.eye(36)[Y.reshape(-1)]
     return Y
 
-# Go from one hot / probabilities to a character
+## @fn convert_from_one_hot
+#  @brief This function converts a given one-hot encoded label back to its original representation.
+#  @param one_hot_labels The one-hot encoded labels to convert.
+#  @return The original representation of the labels.
 def convert_from_one_hot(one_hot_labels):
     # Convert the one-hot encoded labels back to their original representation
     # Assuming the labels were one-hot encoded using the provided convert_to_one_hot function
@@ -105,7 +151,9 @@ def convert_from_one_hot(one_hot_labels):
 
     return decoded_labels
 
-# Detect the key and value of a clue
+## @fn clue_detect
+#  @brief This function detects the key and value of a clue.
+#  @param clue_board The clue board to detect from.
 def clue_detect(clue_board):
 
     # detect the key
@@ -217,12 +265,20 @@ def clue_detect(clue_board):
 # clue location: int (-1 to 8); -1 and 0 are special cases - see below
 # clue prediction: n characters (no spaces, all capitals)
 
-# publiser helper function
+## @fn pub_clue
+#  @brief This function publishes a clue message.
+#  @param id The team ID.
+#  @param password The team password.
+#  @param location The clue location.
+#  @param prediction The clue prediction.
 def pub_clue(id,password,location,prediciton):
     formatted_string = f"{id},{password},{location},{prediciton}"
     score_pub.publish(formatted_string)
 
-# publisher velocity helper function
+## @fn pub_cmd_vel
+#  @brief This function publishes a velocity command.
+#  @param x The linear velocity.
+#  @param z The angular velocity.
 def pub_cmd_vel(x,z):
     move = Twist()
     move.angular.z = z
@@ -230,8 +286,11 @@ def pub_cmd_vel(x,z):
     move.linear.x = x
     move_pub.publish(move)
 
-# State Machine Class
+## @class StateMachine
+#  @brief This class represents a state machine.
 class StateMachine:
+    ## @fn __init__
+    #  @brief This function initializes the state machine.
     def __init__(self):
         self.current_state = "ROAD"
         print(f'Starting state:{self.current_state}')
@@ -259,7 +318,8 @@ class StateMachine:
 
     # State Functions
         
-    # Road State
+    ## @fn road_state
+    #  @brief This function defines the behavior of the robot in the road state.
     def road_state(self):
         if not self.started:
             pub_clue(id,password,0,"NA")
@@ -269,7 +329,8 @@ class StateMachine:
             z = run_model(self.drive_input,interpreter_road,input_details_road,output_details_road,2.8)#2.8
             pub_cmd_vel(.7,z)
 
-    # Grass State
+    ## @fn grass_state
+    #  @brief This function defines the behavior of the robot in the grass state.
     def grass_state(self):
         # if self.bridge_boost:
         #     z = run_model(self.drive_input,interpreter_grass,input_details_grass,output_details_grass,3)
@@ -279,7 +340,8 @@ class StateMachine:
         print(z)
         pub_cmd_vel(.65,z)
 
-    # Yoda Drive State
+    ## @fn yoda_drive_state
+    #  @brief This function defines the behavior of the robot in the Yoda drive state.
     def yoda_drive_state(self):
         z = run_model(self.drive_input,interpreter_yoda,input_details_yoda,output_details_yoda,3)
         if self.yoda_wait:
@@ -289,7 +351,8 @@ class StateMachine:
         else:
             pub_cmd_vel(1,z)
 
-    # Yoda Wait State
+    ## @fn yoda_wait_state
+    #  @brief This function defines the behavior of the robot in the Yoda wait state.
     def yoda_wait_state(self):
         pub_cmd_vel(0,0)
         filtered_cnts=[]
@@ -317,6 +380,7 @@ class StateMachine:
                 else:
                     self.frame_counter +=1 
                     print(self.frame_counter)
+            # If Yoda is not in the frame, start the pink cooldown
             if self.frame_counter > 11:
                 self.frame_counter = 0
                 holder = self.current_state
@@ -331,7 +395,8 @@ class StateMachine:
                 print(f'{holder} -------> {self.current_state}')
         
     
-    # Mountain State
+    ## @fn mountain_state
+    #  @brief This function defines the behavior of the robot in the mountain state.
     def mountain_state(self):
         # if not self.aligned:
         #     self.align()
@@ -343,7 +408,8 @@ class StateMachine:
             z = run_model(self.drive_input,interpreter_mountain,input_details_mountain,output_details_mountain,2.7)
             pub_cmd_vel(.5,z) # mountain not sped up works consistently 
 
-    # Pedestrian State
+    ## @fn pedestrian_state
+    #  @brief This function defines the behavior of the robot in the pedestrian state.
     def pedestrian_state(self):
         # Check if pedestrian is in the frame
         fg_mask = self.bg_subtractor.apply(self.state_data1)
@@ -365,7 +431,8 @@ class StateMachine:
             pub_cmd_vel(.1,0)
             print(f'{holder} -------> {self.current_state}')
              
-    # Vehicle State
+    ## @fn vehicle_state
+    #  @brief This function defines the behavior of the robot in the vehicle state.
     def vehicle_state(self):
         # Check if vehicle is in the frame
         fg_mask = self.bg_subtractor.apply(self.state_data1)
@@ -393,21 +460,26 @@ class StateMachine:
             self.current_state = "ROAD"
             print(f'{holder} -------> {self.current_state}')
 
-    # Publish Clues
+    ## @fn publish_clues
+    #  @brief This function publishes the clues detected by the robot.
     def publish_clues(self):
         print("Publishing Clues")
+        # Iterate over the list of clues
         for i, clue_set in enumerate(self.clues):
+            # Reset the list of good values
             self.good_values = []
             
+            # Reverse the order of the clues in the set and take the first 5
             clue_set2 = clue_set[::-1]
             clue_set3 = clue_set2[:5]
             for clue in clue_set3:
-                
+                # Detect the key and value of the clue
                 key, value = clue_detect(clue)
                 if key in possible_keys:
                     self.good_values.append(value)
                     submit_key = key
-                    
+
+            # If there are any good values 
             if self.good_values:
                 # Use Counter to count occurrences of each element in the list
                 counts = Counter(self.good_values)
@@ -426,7 +498,7 @@ class StateMachine:
                 pub_clue(id,password,i+1,value)
 
         
-        # Save clues with correct names to files
+        # The following commented out code saves clues with correct names to files
         # if not os.path.exists(output_path):
         #    os.makedirs(output_path)
 
@@ -460,13 +532,15 @@ class StateMachine:
         #             #cv2.imshow(clue)
         #             cv2.imwrite(filename, clue)
 
-    # End Run
+    ## @fn end_run
+    #  @brief This function is called when the run is ending.
     def end_run(self, event):
         print("ENDING RUN")
         self.publish_clues()
         pub_clue(id,password,-1,"NA")
 
-    # Event Functions
+    ## @fn event_occurred
+    #  @brief This function is called when an event occurs.
     def event_occurred(self, event, data):
         # Callback function to handle the event
         if event == "PINK" and not self.pink_cooldown:
@@ -509,6 +583,7 @@ class StateMachine:
                 
             print(f'{holder} -------> {self.current_state}')
 
+        ## @brief If the event is "CLUE", the clue is added to the current clue list.
         if event == "CLUE":
             if self.clue_count == 4:
                 self.bridge_boost = False
@@ -518,11 +593,13 @@ class StateMachine:
             self.cur_clue.append(data)
             print("CLUE ADDED")
             
-    # Timer Functions
+    ## @fn reset_pink_cooldown
+    #  @brief This function resets the pink cooldown.
     def reset_pink_cooldown(self, event):
         self.pink_cooldown = False
 
-    # Moves to the next clueboard
+    ## @fn update_clue_count
+    #  @brief This function updates the clue count and moves to the next clueboard.
     def update_clue_count(self, event):
         self.clue_cooldown = False
         self.clues.append(self.cur_clue)
@@ -551,21 +628,26 @@ class StateMachine:
         # self.publish_clues()
 
         
-    # Yoda Wait Function
+    ## @fn set_yoda_wait
+    #  @brief This function sets Yoda to wait.
     def set_yoda_wait(self, event):
         self.yoda_wait = True
         print("YODA 1 passed")
     
-    # Boost Functions
+    ## @fn bridge_boost_on
+    #  @brief This function turns on the bridge boost.
     def bridge_boost_on(self, event):
         print("bridge boost")
         self.bridge_boost = True
 
+    ## @fn mountain_boost_on
+    #  @brief This function turns on the mountain boost.
     def mountain_boost_on(self, event):
         print("mountain boost")
         self.mountain_boost = True
 
-    # Align Function
+    ## @fn align
+    #  @brief This function aligns the robot.
     def align(self):
         contours, _ = cv2.findContours(self.state_data2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         largest_contour = max(contours, key=cv2.contourArea)
@@ -601,7 +683,7 @@ class StateMachine:
         
             
 
-#initialize publishers
+# Initialize publishers
 rospy.init_node('controller_node')
 move_pub = rospy.Publisher('/R1/cmd_vel', Twist, 
   queue_size=10)    
@@ -615,7 +697,8 @@ password = "password"
 state_machine = StateMachine()
 
 
-# Callback function to handle the image
+## @fn camera_callback
+#  @brief Callback function to handle the image.
 def camera_callback(data):
     lower_pink= np.array([140,80,105])
     upper_pink= np.array([153,255,255])
@@ -782,8 +865,8 @@ def camera_callback(data):
         state_machine.mountain_state()
             
     #pub_clue(id,password,-1,"NA")
-
-# Subscribe to ROS topics
+## @fn subscribe()
+# @brief The function subscribe() subscribes to the ROS topics '/R1/pi_camera/image_raw' and '/clock'.
 def subscribe():
     rospy.Subscriber('/R1/pi_camera/image_raw',Image,camera_callback)
     rospy.Subscriber('/clock',Clock)
@@ -791,8 +874,7 @@ def subscribe():
 
 subscribe()
 
+## @brief The main loop of the program. It keeps running until ROS is shutdown.
 rate = rospy.Rate(10)
-
-
 while not rospy.is_shutdown():
     rospy.spin()    
